@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Montserrat, Sora } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 const sora = Sora({
@@ -27,7 +28,10 @@ export default function RootLayout({
       lang="en"
       className={`${sora.variable} ${montserrat.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col font-sans">{children}</body>
+      <body className="flex min-h-full flex-col font-sans">
+        {children}
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
