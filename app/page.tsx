@@ -57,6 +57,8 @@ export default function Home() {
 
   const questionStartRef = useRef(0);
   const timePerQuestionRef = useRef<number[]>([]);
+  const correctAudioRef = useRef<HTMLAudioElement | null>(null);
+  const wrongAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const currentQuestion = QUESTIONS[currentQuestionIndex];
 
@@ -81,11 +83,29 @@ export default function Home() {
     questionStartRef.current = Date.now();
   };
 
+  const playFeedbackSound = (isCorrect: boolean) => {
+    const targetRef = isCorrect ? correctAudioRef : wrongAudioRef;
+    if (!targetRef.current) {
+      targetRef.current = new Audio(
+        isCorrect
+          ? "/Sound%20track/Correct%20Answer.mp3"
+          : "/Sound%20track/Wrong%20Answer.mp3",
+      );
+      targetRef.current.preload = "auto";
+    }
+
+    targetRef.current.currentTime = 0;
+    void targetRef.current.play().catch(() => {
+      // Ignore autoplay/device audio restrictions silently.
+    });
+  };
+
   const selectAnswer = (selectedOptionIndex: number) => {
     setAnswers((previous) => ({
       ...previous,
       [currentQuestion.id]: selectedOptionIndex,
     }));
+    playFeedbackSound(selectedOptionIndex === currentQuestion.correct);
     const selectedOption = currentQuestion.options[selectedOptionIndex];
     setRecentlySelectedOption(selectedOption);
     window.setTimeout(() => {
