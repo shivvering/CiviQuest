@@ -294,10 +294,10 @@ export default function Home() {
             <Image
               src="/Civvy-v2.png"
               alt="Civvy dolphin"
-              width={190}
-              height={190}
+              width={220}
+              height={220}
               priority
-              className="h-28 w-28 object-contain md:h-36 md:w-36"
+              className="h-32 w-32 object-contain md:h-40 md:w-40"
             />
           </div>
         )}
