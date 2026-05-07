@@ -289,7 +289,7 @@ export default function Home() {
         {step === "start" && (
           <div className="mb-4 flex w-full items-start justify-center gap-3 rounded-3xl bg-gradient-to-b from-[#EAF7FF] via-[#F2FBFF] to-[#DDF3FF] p-4 md:gap-4 md:p-5">
             <p className="mt-2 rounded-2xl bg-white px-4 py-2 text-sm font-bold text-[#063E5F] shadow-[0_8px_18px_rgba(6,62,95,0.18)] md:text-base">
-              Hello I&apos;m Civvy 👋
+              Hello, I&apos;m Civvy 👋
             </p>
             <Image
               src="/civvy-main.png"
