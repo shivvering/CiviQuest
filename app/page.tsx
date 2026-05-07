@@ -18,7 +18,8 @@ type QuizStep = "start" | "intro" | "form" | "quiz" | "result";
 type UserInfo = {
   name: string;
   age: string;
-  occupation: string;
+  school: string;
+  className: string;
 };
 
 const TOTAL_TIME_SECONDS = 60;
@@ -34,7 +35,8 @@ export default function Home() {
   const [userInfo, setUserInfo] = useState<UserInfo>({
     name: "",
     age: "",
-    occupation: "",
+    school: "",
+    className: "",
   });
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -169,7 +171,8 @@ export default function Home() {
     void saveSubmission({
       name: userInfo.name,
       ageGroup: deriveAgeGroup(userInfo.age),
-      occupation: userInfo.occupation,
+      school: userInfo.school,
+      className: userInfo.className,
       answers: answersMap,
       score,
       totalTime: elapsedSeconds,
@@ -178,11 +181,11 @@ export default function Home() {
       categoryScores,
       quizStatus: status,
     }).then((result) => {
-      setSaveNotice(
-        result.ok ? "Your answers were saved. Thank you for helping our study!" : result.error,
-      );
+      if (result.ok) {
+        setSaveNotice("Your answers were saved. Thank you for helping our study!");
+      }
     });
-  }, [answers, calculateScore, confidenceByQuestion, quizStartTime, timeLeft, userInfo.age, userInfo.name, userInfo.occupation]);
+  }, [answers, calculateScore, confidenceByQuestion, quizStartTime, timeLeft, userInfo.age, userInfo.className, userInfo.name, userInfo.school]);
 
   useEffect(() => {
     if (step === "quiz" && timeLeft > 0) {
@@ -200,7 +203,8 @@ export default function Home() {
     setUserInfo({
       name: "",
       age: "",
-      occupation: "",
+      school: "",
+      className: "",
     });
     setCurrentQuestionIndex(0);
     setAnswers({});
@@ -262,31 +266,29 @@ export default function Home() {
     >
       <main className="mx-auto flex min-h-[85vh] w-full max-w-2xl flex-col items-center justify-center rounded-3xl bg-white p-6 text-center leading-relaxed shadow-[0_18px_40px_rgba(6,62,95,0.14)] md:p-10">
         {step === "start" && (
-          <>
-            <div className="mb-4 flex w-full items-start justify-center gap-3 rounded-3xl bg-gradient-to-b from-[#EAF7FF] via-[#F2FBFF] to-[#DDF3FF] p-4 md:gap-4 md:p-5">
-              <p className="mt-2 rounded-2xl bg-white px-4 py-2 text-sm font-bold text-[#063E5F] shadow-[0_8px_18px_rgba(6,62,95,0.18)] md:text-base">
-                Hello I&apos;m Civvy 👋
-              </p>
-              <Image
-                src="/civvy-main.png"
-                alt="Civvy dolphin"
-                width={190}
-                height={190}
-                priority
-                className="h-28 w-28 object-contain md:h-36 md:w-36"
-              />
-            </div>
-
+          <div className="mb-4 flex w-full items-start justify-center gap-3 rounded-3xl bg-gradient-to-b from-[#EAF7FF] via-[#F2FBFF] to-[#DDF3FF] p-4 md:gap-4 md:p-5">
+            <p className="mt-2 rounded-2xl bg-white px-4 py-2 text-sm font-bold text-[#063E5F] shadow-[0_8px_18px_rgba(6,62,95,0.18)] md:text-base">
+              Hello I&apos;m Civvy 👋
+            </p>
             <Image
-              src="/cq-logo.png"
-              alt="CiviQuest CQ logo"
-              width={112}
-              height={112}
+              src="/civvy-main.png"
+              alt="Civvy dolphin"
+              width={190}
+              height={190}
               priority
-              className="mb-3 h-16 w-16 object-contain md:h-20 md:w-20"
+              className="h-28 w-28 object-contain md:h-36 md:w-36"
             />
-          </>
+          </div>
         )}
+
+        <Image
+          src="/cq-logo.png"
+          alt="CiviQuest CQ logo"
+          width={112}
+          height={112}
+          priority
+          className="mb-3 h-16 w-16 object-contain md:h-20 md:w-20"
+        />
 
         <h1 className="mb-3 font-[var(--font-montserrat)] text-4xl font-black tracking-tight leading-[1.2] md:text-5xl">
           CiviQuest
@@ -348,33 +350,58 @@ export default function Home() {
               <span className="mb-1 block text-sm font-semibold">Age</span>
               <input
                 type="number"
-                min="1"
+                min="10"
+                max="14"
                 value={userInfo.age}
                 onChange={(event) => handleFormChange("age", event.target.value)}
-                placeholder="Enter your age"
+                placeholder="10 to 14"
                 className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
                 style={{ borderColor: "#E5F6FF" }}
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-semibold">Occupation</span>
+              <span className="mb-1 block text-sm font-semibold">School</span>
               <input
                 type="text"
-                value={userInfo.occupation}
+                value={userInfo.school}
                 onChange={(event) =>
-                  handleFormChange("occupation", event.target.value)
+                  handleFormChange("school", event.target.value)
                 }
-                placeholder="School / class / role"
+                placeholder="Enter school name"
                 className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
                 style={{ borderColor: "#E5F6FF" }}
               />
             </label>
 
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold">Class</span>
+              <select
+                value={userInfo.className}
+                onChange={(event) =>
+                  handleFormChange("className", event.target.value)
+                }
+                className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
+                style={{ borderColor: "#E5F6FF" }}
+              >
+                <option value="">Select class</option>
+                <option value="5">Class 5</option>
+                <option value="6">Class 6</option>
+                <option value="7">Class 7</option>
+                <option value="8">Class 8</option>
+                <option value="9">Class 9</option>
+              </select>
+            </label>
+
             <button
               type="button"
               onClick={() => setStep("intro")}
-              disabled={!userInfo.name || !userInfo.age || !userInfo.occupation}
+              disabled={
+                !userInfo.name ||
+                !userInfo.age ||
+                !userInfo.school ||
+                !userInfo.className
+              }
               className="mt-3 min-h-[52px] w-full rounded-2xl px-6 py-5 font-[var(--font-montserrat)] text-xl font-bold text-white transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               style={{ backgroundColor: "#4296CD" }}
             >
@@ -490,13 +517,6 @@ export default function Home() {
                   : "Next question"}
               </button>
 
-              <Image
-                src="/civiquest-logo.png"
-                alt="Civvy mascot"
-                width={76}
-                height={76}
-                className="absolute bottom-4 right-4 h-14 w-14 rounded-full object-cover opacity-90 md:h-[76px] md:w-[76px]"
-              />
             </div>
           </section>
         )}
@@ -523,6 +543,14 @@ export default function Home() {
             <p className="mb-6 text-center text-base" style={{ color: "#063E5F" }}>
               Total time: {timeTaken}s
             </p>
+
+            <Image
+              src="/civvy-main.png"
+              alt="Civvy dolphin"
+              width={160}
+              height={160}
+              className="mx-auto mb-4 h-24 w-24 object-contain md:h-28 md:w-28"
+            />
 
             {saveNotice && (
               <p

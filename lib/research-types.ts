@@ -9,7 +9,8 @@ export type CategoryScoreMap = {
 export type CapstoneResearchDocument = {
   name: string;
   ageGroup: string;
-  occupation: string;
+  school: string;
+  className: string;
   answers: Record<string, string>;
   score: number;
   totalTime: number;

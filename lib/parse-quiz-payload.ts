@@ -23,7 +23,8 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
   }
   const name = body.name;
   const ageGroup = body.ageGroup;
-  const occupation = body.occupation;
+  const school = body.school;
+  const className = body.className;
   const answers = body.answers;
   const score = body.score;
   const totalTime = body.totalTime;
@@ -35,7 +36,8 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
   if (
     typeof name !== "string" ||
     typeof ageGroup !== "string" ||
-    typeof occupation !== "string" ||
+    typeof school !== "string" ||
+    typeof className !== "string" ||
     !isRecord(answers) ||
     typeof score !== "number" ||
     typeof totalTime !== "number" ||
@@ -72,7 +74,8 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
   return {
     name,
     ageGroup,
-    occupation,
+    school,
+    className,
     answers: answers as SaveDataInput["answers"],
     score,
     totalTime,
