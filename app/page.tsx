@@ -292,7 +292,7 @@ export default function Home() {
               Hello, I&apos;m Civvy 👋
             </p>
             <Image
-              src="/civvy-main.png"
+              src="/Civvy.png"
               alt="Civvy dolphin"
               width={190}
               height={190}
@@ -566,7 +566,7 @@ export default function Home() {
             </p>
 
             <Image
-              src="/civvy-main.png"
+              src="/Civvy.png"
               alt="Civvy dolphin"
               width={160}
               height={160}
