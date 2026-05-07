@@ -88,8 +88,8 @@ export default function Home() {
     if (!targetRef.current) {
       targetRef.current = new Audio(
         isCorrect
-          ? "/Sound%20track/Correct%20Answer.mp3"
-          : "/Sound%20track/Wrong%20Answer.mp3",
+          ? "/soundtrack/correct-answer.mp3"
+          : "/soundtrack/wrong-answer.mp3",
       );
       targetRef.current.preload = "auto";
     }
@@ -105,7 +105,6 @@ export default function Home() {
       ...previous,
       [currentQuestion.id]: selectedOptionIndex,
     }));
-    playFeedbackSound(selectedOptionIndex === currentQuestion.correct);
     const selectedOption = currentQuestion.options[selectedOptionIndex];
     setRecentlySelectedOption(selectedOption);
     window.setTimeout(() => {
@@ -132,12 +131,14 @@ export default function Home() {
   };
 
   const goToNextQuestion = () => {
-    const hasAnswer = typeof answers[currentQuestion.id] === "number";
+    const selectedOptionIndex = answers[currentQuestion.id];
+    const hasAnswer = typeof selectedOptionIndex === "number";
     const hasConfidence = Boolean(confidenceByQuestion[currentQuestion.id]);
     if (!hasAnswer || !hasConfidence) {
       return;
     }
 
+    playFeedbackSound(selectedOptionIndex === currentQuestion.correct);
     recordElapsedForCurrentQuestion();
 
     if (currentQuestionIndex < QUESTIONS.length - 1) {
