@@ -17,6 +17,12 @@ function isConfidence(value: unknown): value is ConfidenceLabel {
   );
 }
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isParentEmail(value: unknown): value is string {
+  return typeof value === "string" && EMAIL_PATTERN.test(value);
+}
+
 export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
   if (!isRecord(body)) {
     return null;
@@ -25,6 +31,7 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
   const ageGroup = body.ageGroup;
   const school = body.school;
   const className = body.className;
+  const parentEmail = body.parentEmail;
   const answers = body.answers;
   const score = body.score;
   const totalTime = body.totalTime;
@@ -38,13 +45,15 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
     typeof ageGroup !== "string" ||
     typeof school !== "string" ||
     typeof className !== "string" ||
+    !isParentEmail(parentEmail) ||
     !isRecord(answers) ||
     typeof score !== "number" ||
     typeof totalTime !== "number" ||
     !Array.isArray(timePerQuestion) ||
-    timePerQuestion.length !== 10 ||
     !Array.isArray(confidenceLevels) ||
-    confidenceLevels.length !== 10 ||
+    timePerQuestion.length === 0 ||
+    confidenceLevels.length === 0 ||
+    timePerQuestion.length !== confidenceLevels.length ||
     !isRecord(categoryScores) ||
     (quizStatus !== "Completed" && quizStatus !== "Time Up")
   ) {
@@ -76,6 +85,7 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
     ageGroup,
     school,
     className,
+    parentEmail,
     answers: answers as SaveDataInput["answers"],
     score,
     totalTime,

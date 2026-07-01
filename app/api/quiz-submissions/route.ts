@@ -31,8 +31,8 @@ export async function POST(request: Request) {
   const sql = neon(databaseUrl);
   try {
     await sql`
-      INSERT INTO civiquest_submissions (payload)
-      VALUES (${JSON.stringify(payload)}::jsonb)
+      INSERT INTO civiquest_submissions (parent_email, payload)
+      VALUES (${payload.parentEmail}, ${JSON.stringify(payload)}::jsonb)
     `;
   } catch (error) {
     const message =

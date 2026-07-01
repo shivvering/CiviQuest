@@ -11,6 +11,7 @@ export type CapstoneResearchDocument = {
   ageGroup: string;
   school: string;
   className: string;
+  parentEmail: string;
   answers: Record<string, string>;
   score: number;
   totalTime: number;
