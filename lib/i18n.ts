@@ -315,7 +315,7 @@ export const UI = {
       },
       "all-rounder": { title: "ऑल-राउंडर", hint: "चारों क्वेस्ट पूरी करो।" },
       "boss-crown": { title: "सिवी का ताज", hint: "सिविक हीरो फ़िनाले जीतो।" },
-      "streak-3": { title: "आग लगा दी", hint: "लगातार 3 अलग दिनों में खेलो।" },
+      "streak-3": { title: "स्ट्रीक मास्टर", hint: "लगातार 3 अलग दिनों में खेलो।" },
       "civic-hero": { title: "सिविक हीरो", hint: "300 XP इकट्ठा करो।" },
     },
     rowPositive: [

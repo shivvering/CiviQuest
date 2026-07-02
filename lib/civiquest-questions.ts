@@ -399,7 +399,7 @@ export const QUESTIONS: CiviQuestion[] = [
     ],
     correct: 1,
     feedback:
-      "Overloaded vehicles tip and brake badly. No discount is worth a broken arm.",
+      "Overloaded vehicles tip and brake badly. No discount is worth getting hurt.",
   },
   {
     id: 206,
@@ -762,7 +762,7 @@ export const QUESTIONS: CiviQuestion[] = [
     ],
     correct: 1,
     feedback:
-      "Specific reports to adults stop bullying faster than fists or avoidance.",
+      "Specific reports to adults stop bullying faster than fighting or avoiding it.",
   },
 
   // ─── Environment & water (💧) ────────────────────────────────────

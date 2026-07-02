@@ -11,6 +11,14 @@ import { ThemeToggle } from "@/app/components/ThemeToggle";
 
 const GRADES = ["A+", "A", "B", "C", "Needs Practice"];
 
+/** Grades are stored canonically in English; only the label localizes. */
+function gradeLabel(grade: string, lang: "en" | "hi"): string {
+  if (lang === "hi" && grade === "Needs Practice") {
+    return "अभ्यास चाहिए";
+  }
+  return grade;
+}
+
 const TCOPY = {
   en: {
     studentApp: "← Student app",
@@ -395,7 +403,7 @@ export default function TeacherPage() {
                         className="rounded-full px-3 py-1.5 text-sm font-black"
                         style={{ backgroundColor: "var(--gold)", color: "#5b4300" }}
                       >
-                        {row.teacherGrade}
+                        {gradeLabel(row.teacherGrade, lang)}
                       </span>
                     )}
                     <span aria-hidden style={{ color: "var(--text-faint)" }}>
@@ -487,7 +495,7 @@ export default function TeacherPage() {
                                     }
                               }
                             >
-                              {g}
+                              {gradeLabel(g, lang)}
                             </button>
                           ))}
                         </div>

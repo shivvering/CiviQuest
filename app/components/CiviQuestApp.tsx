@@ -1085,8 +1085,13 @@ export function CiviQuestApp() {
               : t.questComplete}
       </h2>
       <p className="mb-1 text-lg font-bold" style={{ color: "var(--text-strong)" }}>
-        {finalScore}/{questions.length} {t.picksOf} ·{" "}
-        {"★".repeat(starsFor(category))}
+        {finalScore}/{questions.length} {t.picksOf}
+        {starsFor(category) > 0 && (
+          <span style={{ color: "var(--gold)" }}>
+            {" "}
+            · {"★".repeat(starsFor(category))}
+          </span>
+        )}
       </p>
       <p className="mb-4 text-sm" style={{ color: "var(--text-soft)" }}>
         {t.time}: {timeTaken}s · {t.xpEarned}:{" "}

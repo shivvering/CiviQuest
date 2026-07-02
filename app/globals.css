@@ -79,6 +79,29 @@ body {
   transition: background 0.4s ease, color 0.4s ease;
 }
 
+/* Hindi mode: Sora/Montserrat lack Devanagari, so swap everything to
+   Baloo 2 (rounded, kid-friendly, full Devanagari coverage). The
+   element selectors outrank the inline font-[var(--font-montserrat)]
+   utility used on headings and buttons. */
+html[lang="hi"] body,
+html[lang="hi"] h1,
+html[lang="hi"] h2,
+html[lang="hi"] h3,
+html[lang="hi"] p,
+html[lang="hi"] span,
+html[lang="hi"] button,
+html[lang="hi"] a,
+html[lang="hi"] li,
+html[lang="hi"] input,
+html[lang="hi"] select,
+html[lang="hi"] textarea,
+html[lang="hi"] label {
+  font-family: var(--font-baloo), var(--font-sora), sans-serif;
+}
+html[lang="hi"] body {
+  line-height: 1.65;
+}
+
 /* ─── Motion ─────────────────────────────────────────────────────── */
 
 @keyframes cq-float {

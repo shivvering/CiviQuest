@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Montserrat, Sora } from "next/font/google";
+import { Baloo_2, Montserrat, Sora } from "next/font/google";
 import "./globals.css";
 
 const sora = Sora({
@@ -10,6 +10,13 @@ const sora = Sora({
 const montserrat = Montserrat({
   variable: "--font-montserrat",
   subsets: ["latin"],
+});
+
+// Sora/Montserrat have no Devanagari glyphs; Baloo 2 keeps Hindi mode
+// looking playful instead of falling back to the system font.
+const baloo = Baloo_2({
+  variable: "--font-baloo",
+  subsets: ["latin", "devanagari"],
 });
 
 export const metadata: Metadata = {
@@ -42,11 +49,14 @@ export const metadata: Metadata = {
   },
 };
 
-// Applies the saved theme before first paint so dark mode never flashes.
+// Applies the saved theme and language before first paint — no flash of
+// wrong colors or wrong font.
 const themeInitScript = `
 try {
   var t = localStorage.getItem("cq-theme");
   if (t === "dark") document.documentElement.dataset.theme = "dark";
+  var l = localStorage.getItem("cq-lang");
+  if (l === "hi") document.documentElement.lang = "hi";
 } catch (e) {}
 `;
 
@@ -58,7 +68,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sora.variable} ${montserrat.variable} h-full antialiased`}
+      className={`${sora.variable} ${montserrat.variable} ${baloo.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col font-sans">
