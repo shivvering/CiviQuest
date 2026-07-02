@@ -23,6 +23,13 @@ function isParentEmail(value: unknown): value is string {
   return typeof value === "string" && EMAIL_PATTERN.test(value);
 }
 
+const CATEGORY_KEYS = [
+  "cleanliness",
+  "traffic",
+  "public_behavior",
+  "environment",
+] as const;
+
 export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
   if (!isRecord(body)) {
     return null;
@@ -32,8 +39,10 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
   const school = body.school;
   const className = body.className;
   const parentEmail = body.parentEmail;
+  const levelCategory = body.levelCategory;
   const answers = body.answers;
   const score = body.score;
+  const totalQuestions = body.totalQuestions;
   const totalTime = body.totalTime;
   const timePerQuestion = body.timePerQuestion;
   const confidenceLevels = body.confidenceLevels;
@@ -45,9 +54,11 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
     typeof ageGroup !== "string" ||
     typeof school !== "string" ||
     typeof className !== "string" ||
+    typeof levelCategory !== "string" ||
     !isParentEmail(parentEmail) ||
     !isRecord(answers) ||
     typeof score !== "number" ||
+    typeof totalQuestions !== "number" ||
     typeof totalTime !== "number" ||
     !Array.isArray(timePerQuestion) ||
     !Array.isArray(confidenceLevels) ||
@@ -72,12 +83,10 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
   }
 
   const cs = categoryScores as Record<string, unknown>;
-  if (
-    typeof cs.cleanliness !== "number" ||
-    typeof cs.traffic !== "number" ||
-    typeof cs.public_behavior !== "number"
-  ) {
-    return null;
+  for (const key of CATEGORY_KEYS) {
+    if (typeof cs[key] !== "number") {
+      return null;
+    }
   }
 
   return {
@@ -86,8 +95,10 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
     school,
     className,
     parentEmail,
+    levelCategory,
     answers: answers as SaveDataInput["answers"],
     score,
+    totalQuestions,
     totalTime,
     timePerQuestion: timePerQuestion as number[],
     confidenceLevels: confidenceLevels as ConfidenceLabel[],
@@ -95,6 +106,7 @@ export function parseQuizSubmissionBody(body: unknown): SaveDataInput | null {
       cleanliness: cs.cleanliness as number,
       traffic: cs.traffic as number,
       public_behavior: cs.public_behavior as number,
+      environment: cs.environment as number,
     },
     quizStatus,
   };

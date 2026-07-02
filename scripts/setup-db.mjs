@@ -110,6 +110,23 @@ async function main() {
   `;
 
   await sql`
+    ALTER TABLE civiquest_submissions
+      ADD COLUMN IF NOT EXISTS teacher_grade TEXT
+  `;
+  await sql`
+    ALTER TABLE civiquest_submissions
+      ADD COLUMN IF NOT EXISTS teacher_comment TEXT
+  `;
+  await sql`
+    ALTER TABLE civiquest_submissions
+      ADD COLUMN IF NOT EXISTS graded_by TEXT
+  `;
+  await sql`
+    ALTER TABLE civiquest_submissions
+      ADD COLUMN IF NOT EXISTS graded_at TIMESTAMPTZ
+  `;
+
+  await sql`
     CREATE INDEX IF NOT EXISTS civiquest_submissions_created_at_idx
       ON civiquest_submissions (created_at DESC)
   `;
@@ -117,6 +134,11 @@ async function main() {
   await sql`
     CREATE INDEX IF NOT EXISTS civiquest_submissions_parent_email_idx
       ON civiquest_submissions (parent_email)
+  `;
+
+  await sql`
+    CREATE INDEX IF NOT EXISTS civiquest_submissions_school_class_idx
+      ON civiquest_submissions ((payload->>'school'), (payload->>'className'))
   `;
 
   console.log("Database ready: table civiquest_submissions exists.");

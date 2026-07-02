@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CiviQuest 🐬
 
-## Getting Started
+A Duolingo-style civic sense adventure for Indian kids in classes 5–8, live at
+[civiquest.in](https://civiquest.in). Guided by **Civvy** the dolphin, kids play
+short real-life levels (10 missions each, 60 seconds per mission) across four
+quests — Clean Streets 🧼, Road Smarts 🚦, Kind in Public 🤝, and Water &
+Nature 💧 — earning XP, streaks, and badges along the way.
 
-First, run the development server:
+Answers are saved (only with parent/guardian consent) to power a civic-awareness
+research study.
+
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Environment (`.env.local`, see `vercel-storage.env.sample`):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `POSTGRES_URL` — Neon Postgres connection string (Vercel → Storage).
+- `TEACHER_CODE` — shared access code for the teacher dashboard at `/teacher`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+One-time database setup / idempotent migration:
 
-## Learn More
+```bash
+npm run setup-db
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Map of the app
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `/` — the game: hero → onboarding (with parent consent) → quest map →
+  quiz → results. Badges and Profile live in the bottom tabs.
+- `/about` — mission, why classes 5–8, Civvy's story, data promises.
+- `/teacher` — class dashboard: teachers load their school + class responses
+  with the access code, review per-question answers, and save a grade +
+  encouraging comment.
+- `POST /api/quiz-submissions` — saves a completed level (validated payload).
+- `GET /api/quiz-submissions?school=&className=` — teacher listing
+  (requires `x-teacher-code` header).
+- `POST /api/grade` — saves teacher grade/comment for a submission.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Questions live in `lib/civiquest-questions.ts`, tagged per class band (5–6 /
+7–8) so every child gets 10 grade-appropriate missions per category.
 
-## Deploy on Vercel
+## Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx vercel --prod
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The Vercel project (`civic-app`) serves civiquest.in; Neon Postgres is attached
+via the Vercel marketplace integration.

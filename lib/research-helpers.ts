@@ -39,6 +39,7 @@ export function computeCategoryScores(
     cleanliness: 0,
     traffic: 0,
     public_behavior: 0,
+    environment: 0,
   };
   for (const q of questions) {
     if (answers[q.id] === q.correct) {

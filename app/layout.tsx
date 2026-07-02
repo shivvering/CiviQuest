@@ -14,11 +14,13 @@ const montserrat = Montserrat({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.civiquest.in"),
-  title: "CiviQuest",
-  description: "CiviQuest helps kids practice civic sense through fun quizzes.",
+  title: "CiviQuest — civic sense, the fun way",
+  description:
+    "A Duolingo-style civic sense adventure for Indian kids in classes 5–8. Play levels, earn badges, and grow habits that build a better India.",
   openGraph: {
-    title: "CiviQuest",
-    description: "CiviQuest helps kids practice civic sense through fun quizzes.",
+    title: "CiviQuest — civic sense, the fun way",
+    description:
+      "A Duolingo-style civic sense adventure for Indian kids in classes 5–8, guided by Civvy the dolphin.",
     url: "https://www.civiquest.in",
     siteName: "CiviQuest",
     images: [
@@ -33,11 +35,20 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "CiviQuest",
-    description: "CiviQuest helps kids practice civic sense through fun quizzes.",
+    title: "CiviQuest — civic sense, the fun way",
+    description:
+      "A Duolingo-style civic sense adventure for Indian kids in classes 5–8, guided by Civvy the dolphin.",
     images: ["/cq-logo.png"],
   },
 };
+
+// Applies the saved theme before first paint so dark mode never flashes.
+const themeInitScript = `
+try {
+  var t = localStorage.getItem("cq-theme");
+  if (t === "dark") document.documentElement.dataset.theme = "dark";
+} catch (e) {}
+`;
 
 export default function RootLayout({
   children,
@@ -48,8 +59,12 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${sora.variable} ${montserrat.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col font-sans">{children}</body>
+      <body className="flex min-h-full flex-col font-sans">
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {children}
+      </body>
     </html>
   );
 }

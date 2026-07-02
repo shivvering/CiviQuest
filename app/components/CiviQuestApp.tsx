@@ -3,7 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { QUESTIONS, type CivicCategory } from "@/lib/civiquest-questions";
+import {
+  CATEGORY_META,
+  CATEGORY_ORDER,
+  questionsForLevel,
+  type CivicCategory,
+} from "@/lib/civiquest-questions";
 import {
   buildAnswersMap,
   computeCategoryScores,
@@ -13,22 +18,29 @@ import {
 } from "@/lib/research-helpers";
 import type { ConfidenceLabel } from "@/lib/research-types";
 import { saveSubmission } from "@/lib/save-submission";
+import {
+  BADGES,
+  EMPTY_PROGRESS,
+  clearProfile,
+  evaluateBadges,
+  loadProfile,
+  loadProgress,
+  saveProfile,
+  saveProgress,
+  touchStreak,
+  type Progress,
+  type StoredProfile,
+} from "@/lib/progress";
+import { Confetti } from "./Confetti";
+import { ThemeToggle } from "./ThemeToggle";
 
-type QuizStep = "start" | "form" | "levels" | "quiz" | "result";
-type LevelId = Extract<CivicCategory, "cleanliness" | "traffic">;
-
-type UserInfo = {
-  name: string;
-  age: string;
-  school: string;
-  className: string;
-  parentEmail: string;
-  parentConsent: boolean;
-};
+type Tab = "home" | "badges" | "profile";
+type HomeStep = "hero" | "onboarding" | "map" | "quiz" | "result";
+type QuizPhase = "answering" | "revealed";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const TOTAL_TIME_SECONDS = 60;
+const QUESTION_SECONDS = 60;
+const HEARTS_PER_LEVEL = 3;
 
 const CONFIDENCE_OPTIONS: ConfidenceLabel[] = [
   "I am sure",
@@ -36,800 +48,1352 @@ const CONFIDENCE_OPTIONS: ConfidenceLabel[] = [
   "Just guessed",
 ];
 
-const LEVELS: Array<{
-  id: LevelId;
-  title: string;
-  subtitle: string;
-  emoji: string;
-  color: string;
-}> = [
-  {
-    id: "cleanliness",
-    title: "Level 1: Cleanliness",
-    subtitle: "Keep parks, classrooms, and streets clean.",
-    emoji: "🧼",
-    color: "#2f9bd7",
-  },
-  {
-    id: "traffic",
-    title: "Level 2: Traffic Rules",
-    subtitle: "Cross safely and respect signals.",
-    emoji: "🚦",
-    color: "#2574d9",
-  },
+const CHEER_CORRECT = [
+  "Splash-tastic! 🎉",
+  "Your street just got prouder!",
+  "Civvy is doing a backflip! 🐬",
+  "That's civic-hero thinking!",
+];
+const CHEER_WRONG = [
+  "Good try! Here's the trick…",
+  "Almost! Civvy learned this the hard way too.",
+  "Every answer teaches us something. 💙",
 ];
 
+const EMPTY_PROFILE: StoredProfile = {
+  name: "",
+  age: "",
+  school: "",
+  className: "",
+  parentEmail: "",
+  parentConsent: false,
+};
+
 export function CiviQuestApp() {
-  const [step, setStep] = useState<QuizStep>("start");
-  const [selectedLevel, setSelectedLevel] = useState<LevelId | null>(null);
-  const [userInfo, setUserInfo] = useState<UserInfo>({
-    name: "",
-    age: "",
-    school: "",
-    className: "",
-    parentEmail: "",
-    parentConsent: false,
-  });
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [tab, setTab] = useState<Tab>("home");
+  const [step, setStep] = useState<HomeStep>("hero");
+  const [profile, setProfile] = useState<StoredProfile>(EMPTY_PROFILE);
+  const [hasProfile, setHasProfile] = useState(false);
+  const [progress, setProgress] = useState<Progress>(EMPTY_PROGRESS);
+  const [hydrated, setHydrated] = useState(false);
+
+  // Quiz state
+  const [category, setCategory] = useState<CivicCategory | null>(null);
+  const [qIndex, setQIndex] = useState(0);
+  const [phase, setPhase] = useState<QuizPhase>("answering");
   const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [confidenceByQuestion, setConfidenceByQuestion] = useState<
+  const [confidences, setConfidences] = useState<
     Record<number, ConfidenceLabel>
   >({});
-  const [timeLeft, setTimeLeft] = useState(TOTAL_TIME_SECONDS);
-  const [resultStatus, setResultStatus] = useState<"Completed" | "Time Up">(
-    "Completed",
-  );
+  const [hearts, setHearts] = useState(HEARTS_PER_LEVEL);
+  const [timeLeft, setTimeLeft] = useState(QUESTION_SECONDS);
+  const [timedOutIds, setTimedOutIds] = useState<number[]>([]);
+
+  // Result state
   const [finalScore, setFinalScore] = useState(0);
   const [timeTaken, setTimeTaken] = useState(0);
-  const [recentlySelectedOption, setRecentlySelectedOption] = useState<
-    string | null
-  >(null);
+  const [xpEarned, setXpEarned] = useState(0);
+  const [newBadges, setNewBadges] = useState<string[]>([]);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const questionStartRef = useRef(0);
-  const quizStartRef = useRef<number | null>(null);
+  const quizStartRef = useRef(0);
   const timePerQuestionRef = useRef<number[]>([]);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
   const wrongAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  const activeQuestions = useMemo(
-    () =>
-      selectedLevel
-        ? QUESTIONS.filter((question) => question.category === selectedLevel)
-        : [],
-    [selectedLevel],
+  useEffect(() => {
+    const stored = loadProfile();
+    if (stored) {
+      setProfile(stored);
+      setHasProfile(true);
+      setStep("map");
+    }
+    setProgress(loadProgress());
+    setHydrated(true);
+  }, []);
+
+  const questions = useMemo(
+    () => (category ? questionsForLevel(category, profile.className) : []),
+    [category, profile.className],
   );
-  const currentQuestion = activeQuestions[currentQuestionIndex];
+  const question = questions[qIndex];
 
-  const handleFormChange = (
-    field: keyof UserInfo,
-    value: string | boolean,
-  ) => {
-    setUserInfo((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
-  };
-
-  const startQuiz = (level: LevelId, startedAt: number) => {
-    setSelectedLevel(level);
-    timePerQuestionRef.current = [];
-    setStep("quiz");
-    setCurrentQuestionIndex(0);
-    setAnswers({});
-    setConfidenceByQuestion({});
-    setTimeLeft(TOTAL_TIME_SECONDS);
-    setFinalScore(0);
-    setTimeTaken(0);
-    setResultStatus("Completed");
-    quizStartRef.current = startedAt;
-    questionStartRef.current = startedAt;
-  };
-
-  const playFeedbackSound = (isCorrect: boolean) => {
-    const targetRef = isCorrect ? correctAudioRef : wrongAudioRef;
-    if (!targetRef.current) {
-      targetRef.current = new Audio(
+  const playSound = (isCorrect: boolean) => {
+    const ref = isCorrect ? correctAudioRef : wrongAudioRef;
+    if (!ref.current) {
+      ref.current = new Audio(
         isCorrect
           ? "/soundtrack/correct-answer.mp3"
           : "/soundtrack/wrong-answer.mp3",
       );
-      targetRef.current.preload = "auto";
+      ref.current.preload = "auto";
     }
-
-    targetRef.current.currentTime = 0;
-    void targetRef.current.play().catch(() => {
-      // Ignore autoplay/device audio restrictions silently.
+    ref.current.currentTime = 0;
+    void ref.current.play().catch(() => {
+      /* device audio restrictions */
     });
   };
 
-  const selectAnswer = (selectedOptionIndex: number) => {
-    setAnswers((previous) => ({
-      ...previous,
-      [currentQuestion.id]: selectedOptionIndex,
-    }));
-    const selectedOption = currentQuestion.options[selectedOptionIndex];
-    setRecentlySelectedOption(selectedOption);
-    window.setTimeout(() => {
-      setRecentlySelectedOption((previous) =>
-        previous === selectedOption ? null : previous,
-      );
-    }, 180);
+  // ─── Quiz engine ─────────────────────────────────────────────────
+
+  const startLevel = (cat: CivicCategory) => {
+    setCategory(cat);
+    setQIndex(0);
+    setPhase("answering");
+    setAnswers({});
+    setConfidences({});
+    setHearts(HEARTS_PER_LEVEL);
+    setTimeLeft(QUESTION_SECONDS);
+    setTimedOutIds([]);
+    setSaveNotice(null);
+    timePerQuestionRef.current = [];
+    quizStartRef.current = performance.now();
+    questionStartRef.current = performance.now();
+    setStep("quiz");
   };
 
-  const setConfidence = (level: ConfidenceLabel) => {
-    setConfidenceByQuestion((previous) => ({
-      ...previous,
-      [currentQuestion.id]: level,
-    }));
-  };
-
-  const recordElapsedForCurrentQuestion = () => {
-    const now = performance.now();
+  const recordElapsed = () => {
     const elapsed = Math.max(
       0,
-      Math.round((now - questionStartRef.current) / 1000),
+      Math.round((performance.now() - questionStartRef.current) / 1000),
     );
     timePerQuestionRef.current.push(elapsed);
-    questionStartRef.current = now;
   };
 
-  const goToNextQuestion = () => {
-    const selectedOptionIndex = answers[currentQuestion.id];
-    const hasAnswer = typeof selectedOptionIndex === "number";
-    const hasConfidence = Boolean(confidenceByQuestion[currentQuestion.id]);
-    if (!hasAnswer || !hasConfidence) {
+  const check = useCallback(() => {
+    if (!question) return;
+    const picked = answers[question.id];
+    if (typeof picked !== "number" || !confidences[question.id]) return;
+    recordElapsed();
+    const isCorrect = picked === question.correct;
+    playSound(isCorrect);
+    if (!isCorrect) {
+      setHearts((h) => Math.max(0, h - 1));
+    }
+    setPhase("revealed");
+  }, [answers, confidences, question]);
+
+  const handleTimeout = useCallback(() => {
+    if (!question) return;
+    recordElapsed();
+    playSound(false);
+    setHearts((h) => Math.max(0, h - 1));
+    setTimedOutIds((ids) => [...ids, question.id]);
+    setPhase("revealed");
+  }, [question]);
+
+  useEffect(() => {
+    if (step !== "quiz" || phase !== "answering") return;
+    if (timeLeft <= 0) {
+      handleTimeout();
       return;
     }
+    const t = window.setTimeout(() => setTimeLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [step, phase, timeLeft, handleTimeout]);
 
-    playFeedbackSound(selectedOptionIndex === currentQuestion.correct);
-    recordElapsedForCurrentQuestion();
-
-    if (currentQuestionIndex < activeQuestions.length - 1) {
-      setCurrentQuestionIndex((previous) => previous + 1);
-      setTimeLeft(TOTAL_TIME_SECONDS);
-      return;
-    }
-    finishQuiz("Completed");
-  };
-
-  const calculateScore = useCallback(() => {
+  const finishLevel = useCallback(() => {
+    if (!category) return;
     let score = 0;
-    for (const question of activeQuestions) {
-      if (answers[question.id] === question.correct) {
-        score += 1;
-      }
+    for (const q of questions) {
+      if (answers[q.id] === q.correct) score += 1;
     }
-    return score;
-  }, [activeQuestions, answers]);
-
-  const finishQuiz = useCallback((status: "Completed" | "Time Up") => {
-    const score = calculateScore();
-    const endTime = performance.now();
-    const elapsedSeconds = quizStartRef.current
-      ? Math.round((endTime - quizStartRef.current) / 1000)
-      : TOTAL_TIME_SECONDS - timeLeft;
-
-    if (status === "Time Up") {
-      const partial = Math.max(
-        0,
-        Math.round((performance.now() - questionStartRef.current) / 1000),
-      );
-      timePerQuestionRef.current = [...timePerQuestionRef.current, partial];
-    }
-
-    const { times, confidences } = padResearchArrays(
-      activeQuestions,
-      timePerQuestionRef.current,
-      confidenceByQuestion,
+    const totalSeconds = Math.round(
+      (performance.now() - quizStartRef.current) / 1000,
     );
 
+    // XP: 10 per correct, +20 finishing, +20 perfect
+    const earned =
+      score * 10 + 20 + (score === questions.length ? 20 : 0);
+
+    let next: Progress = {
+      ...progress,
+      xp: progress.xp + earned,
+      levels: {
+        ...progress.levels,
+        [category]: {
+          bestScore: Math.max(
+            progress.levels[category]?.bestScore ?? 0,
+            score,
+          ),
+          totalQuestions: questions.length,
+          attempts: (progress.levels[category]?.attempts ?? 0) + 1,
+        },
+      },
+    };
+    next = touchStreak(next);
+    const badges = evaluateBadges(next, {
+      score,
+      total: questions.length,
+      totalTime: totalSeconds,
+    });
+    saveProgress(next);
+    setProgress(next);
+    setNewBadges(badges);
     setFinalScore(score);
-    setResultStatus(status);
-    setTimeTaken(elapsedSeconds);
+    setTimeTaken(totalSeconds);
+    setXpEarned(earned);
     setStep("result");
     setSaveNotice(null);
 
-    const answersMap = buildAnswersMap(answers, activeQuestions);
-    const categoryScores = computeCategoryScores(activeQuestions, answers);
-
+    const { times, confidences: paddedConf } = padResearchArrays(
+      questions,
+      timePerQuestionRef.current,
+      confidences,
+    );
     void saveSubmission({
-      name: userInfo.name,
-      ageGroup: deriveAgeGroup(userInfo.age),
-      school: userInfo.school,
-      className: userInfo.className,
-      parentEmail: userInfo.parentEmail,
-      answers: answersMap,
+      name: profile.name,
+      ageGroup: deriveAgeGroup(profile.age),
+      school: profile.school,
+      className: profile.className,
+      parentEmail: profile.parentEmail,
+      levelCategory: category,
+      answers: buildAnswersMap(answers, questions),
       score,
-      totalTime: elapsedSeconds,
+      totalQuestions: questions.length,
+      totalTime: totalSeconds,
       timePerQuestion: times,
-      confidenceLevels: confidences,
-      categoryScores,
-      quizStatus: status,
+      confidenceLevels: paddedConf,
+      categoryScores: computeCategoryScores(questions, answers),
+      quizStatus: timedOutIds.length > 0 ? "Time Up" : "Completed",
     }).then((result) => {
       if (result.ok) {
-        setSaveNotice("Your answers were saved. Thank you for helping our study!");
+        setSaveNotice(
+          "Your answers were saved. Thank you for helping our study! 💙",
+        );
       }
     });
-  }, [activeQuestions, answers, calculateScore, confidenceByQuestion, timeLeft, userInfo.age, userInfo.className, userInfo.name, userInfo.parentEmail, userInfo.school]);
+  }, [
+    answers,
+    category,
+    confidences,
+    profile,
+    progress,
+    questions,
+    timedOutIds,
+  ]);
 
-  useEffect(() => {
-    if (step === "quiz" && timeLeft > 0) {
-      const timer = window.setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-      return () => window.clearTimeout(timer);
+  const continueNext = () => {
+    if (qIndex < questions.length - 1) {
+      setQIndex((i) => i + 1);
+      setPhase("answering");
+      setTimeLeft(QUESTION_SECONDS);
+      questionStartRef.current = performance.now();
+    } else {
+      finishLevel();
     }
-
-    if (timeLeft === 0 && step === "quiz") {
-      finishQuiz("Time Up");
-    }
-  }, [finishQuiz, step, timeLeft]);
-
-  const restartApp = () => {
-    setStep("start");
-    setSelectedLevel(null);
-    setUserInfo({
-      name: "",
-      age: "",
-      school: "",
-      className: "",
-      parentEmail: "",
-      parentConsent: false,
-    });
-    setCurrentQuestionIndex(0);
-    setAnswers({});
-    setConfidenceByQuestion({});
-    setTimeLeft(TOTAL_TIME_SECONDS);
-    quizStartRef.current = null;
-    setFinalScore(0);
-    setTimeTaken(0);
-    setResultStatus("Completed");
-    setSaveNotice(null);
-    timePerQuestionRef.current = [];
   };
 
-  const progressFraction =
-    activeQuestions.length > 0
-      ? (currentQuestionIndex + 1) / activeQuestions.length
-      : 0;
+  // ─── Derived ─────────────────────────────────────────────────────
 
-  const resultTips = useMemo(() => {
-    const scores = computeCategoryScores(activeQuestions, answers);
-    const entries = Object.entries(scores) as [
-      keyof typeof scores,
-      number,
-    ][];
-    const tips: Record<string, string> = {
-      cleanliness:
-        "When you spot wrappers near drains after rain, telling a teacher or parent can help stop flooding later.",
-      traffic:
-        "Even if friends cross early, waiting on the footpath for a green signal is one of the safest habits you can build.",
-      public_behavior:
-        "In busy places, a soft voice and a small gesture often work better than shouting — people listen more.",
-    };
-    entries.sort((a, b) => a[1] - b[1]);
-    const out: string[] = [];
-    for (const [key] of entries) {
-      const line = tips[key];
-      if (line) {
-        out.push(line);
-      }
-      if (out.length >= 2) {
-        break;
-      }
+  const formValid =
+    profile.name.trim() &&
+    profile.age &&
+    profile.school.trim() &&
+    profile.className &&
+    profile.parentConsent &&
+    EMAIL_PATTERN.test(profile.parentEmail);
+
+  const unlockIndex = useMemo(() => {
+    let unlocked = 0;
+    for (const cat of CATEGORY_ORDER) {
+      if (progress.levels[cat]) unlocked += 1;
+      else break;
     }
-    return out;
-  }, [activeQuestions, answers]);
+    return unlocked; // nodes 0..unlocked are playable
+  }, [progress.levels]);
+
+  const starsFor = (cat: CivicCategory): number => {
+    const level = progress.levels[cat];
+    if (!level || level.totalQuestions === 0) return 0;
+    const pct = level.bestScore / level.totalQuestions;
+    if (pct >= 0.99) return 3;
+    if (pct >= 0.7) return 2;
+    if (pct >= 0.4) return 1;
+    return 0;
+  };
 
   const scorePercent =
-    activeQuestions.length > 0 ? finalScore / activeQuestions.length : 0;
-  const resultHeadline =
-    scorePercent >= 0.8
-      ? "You are a Civic Champion 🐬"
-      : scorePercent >= 0.5
-        ? "You are a Rising Civic Star 🌟"
-        : "Thanks for sharing how you think! 💙";
+    questions.length > 0 ? finalScore / questions.length : 0;
 
-  const canAdvanceQuestion =
-    typeof answers[currentQuestion?.id ?? 0] === "number" &&
-    Boolean(confidenceByQuestion[currentQuestion?.id ?? 0]);
-  const activeLevelMeta = selectedLevel
-    ? LEVELS.find((level) => level.id === selectedLevel)
-    : null;
+  // ─── UI pieces ───────────────────────────────────────────────────
 
-  return (
-    <div
-      className="relative min-h-screen px-3 py-6 md:px-4 md:py-8"
+  const statChip = (emoji: string, value: string, label: string) => (
+    <span
+      className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold md:text-sm"
       style={{
-        background:
-          "linear-gradient(180deg, #EAF7FF 0%, #F6FCFF 42%, #ECF8FF 100%)",
-        color: "#1E2C3B",
+        borderColor: "var(--line)",
+        backgroundColor: "var(--card)",
+        color: "var(--text-strong)",
+      }}
+      title={label}
+    >
+      <span aria-hidden>{emoji}</span> {value}
+    </span>
+  );
+
+  const header = (
+    <header className="mx-auto mb-4 flex w-full max-w-5xl items-center justify-between gap-3 px-1">
+      <Link href="/" className="flex items-center gap-2">
+        <Image
+          src="/cq-logo.png"
+          alt="CiviQuest logo"
+          width={44}
+          height={44}
+          priority
+          className="h-11 w-11 object-contain"
+        />
+        <span
+          className="font-[var(--font-montserrat)] text-xl font-black tracking-tight md:text-2xl"
+          style={{ color: "var(--text-strong)" }}
+        >
+          CiviQuest
+        </span>
+      </Link>
+      <div className="flex items-center gap-2">
+        {hydrated && hasProfile && (
+          <>
+            {statChip("🔥", String(progress.streak.count), "Day streak")}
+            {statChip("⭐", String(progress.xp), "XP collected")}
+            {step === "quiz" &&
+              statChip("❤️", String(hearts), "Hearts this level")}
+          </>
+        )}
+        <Link
+          href="/about"
+          className="hidden rounded-full border px-4 py-2 text-sm font-bold transition hover:scale-105 sm:block"
+          style={{
+            borderColor: "var(--line)",
+            backgroundColor: "var(--card)",
+            color: "var(--text-strong)",
+          }}
+        >
+          About
+        </Link>
+        <ThemeToggle />
+      </div>
+    </header>
+  );
+
+  const bottomNav = (
+    <nav
+      className="mx-auto mt-6 flex w-full max-w-5xl items-stretch justify-around rounded-2xl border p-1.5 text-sm font-bold"
+      style={{
+        borderColor: "var(--line)",
+        backgroundColor: "var(--card)",
+        color: "var(--text-faint)",
       }}
     >
-      <main className="relative z-10 mx-auto flex min-h-[88vh] w-full max-w-2xl flex-col rounded-[34px] border border-[#dceef8] bg-white p-5 text-center leading-relaxed shadow-[0_18px_40px_rgba(6,62,95,0.14)] md:max-w-4xl md:p-8 lg:max-w-5xl">
-        <div className="mb-4 flex items-center justify-between rounded-2xl bg-[#f0f9ff] px-3 py-2 text-xs font-bold text-[#29516d] md:text-sm">
-          <span>⚡ {selectedLevel ? "In Level Mode" : "Warmup"}</span>
-          <span>🪙 {finalScore}</span>
-          <span>❤️ {step === "quiz" ? "3" : "∞"}</span>
-        </div>
+      {(
+        [
+          ["home", "🗺️", "Quest Map"],
+          ["badges", "🏆", "Badges"],
+          ["profile", "👤", "Profile"],
+        ] as const
+      ).map(([id, emoji, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => {
+            setTab(id);
+            if (id === "home" && (step === "hero" || step === "onboarding")) {
+              // keep current step
+            } else if (id === "home" && hasProfile) {
+              setStep("map");
+            }
+          }}
+          aria-current={tab === id ? "page" : undefined}
+          className="flex flex-1 items-center justify-center gap-2 rounded-xl px-3 py-2.5 transition hover:scale-[1.03] active:scale-95"
+          style={
+            tab === id
+              ? { backgroundColor: "var(--card-softer)", color: "var(--text-strong)" }
+              : undefined
+          }
+        >
+          <span aria-hidden>{emoji}</span>
+          <span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
 
-        {step === "start" && (
-          <div className="mb-4 flex w-full items-start justify-center gap-3 rounded-3xl bg-gradient-to-b from-[#EAF7FF] via-[#F2FBFF] to-[#DDF3FF] p-4 md:gap-4 md:p-5">
-            <p className="mt-2 rounded-2xl bg-white px-4 py-2 text-sm font-bold text-[#063E5F] shadow-[0_8px_18px_rgba(6,62,95,0.18)] md:text-base">
+  // ─── Screens ─────────────────────────────────────────────────────
+
+  const heroScreen = (
+    <section className="cq-slide-up mx-auto w-full max-w-5xl">
+      <div
+        className="relative overflow-hidden rounded-[34px] border p-6 md:p-10"
+        style={{
+          borderColor: "var(--line)",
+          backgroundColor: "var(--card)",
+          boxShadow: "var(--shadow)",
+        }}
+      >
+        <div className="grid items-center gap-8 md:grid-cols-2">
+          <div className="text-left">
+            <p
+              className="mb-3 inline-block rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wider"
+              style={{
+                backgroundColor: "var(--card-softer)",
+                color: "var(--brand-strong)",
+              }}
+            >
+              For classes 5–8 · Made in India 🇮🇳
+            </p>
+            <h1
+              className="mb-4 font-[var(--font-montserrat)] text-4xl font-black leading-[1.15] tracking-tight md:text-6xl"
+              style={{ color: "var(--text-strong)" }}
+            >
+              Civic sense,
+              <br />
+              the fun way.
+            </h1>
+            <p className="mb-6 text-base md:text-lg" style={{ color: "var(--text-soft)" }}>
+              Play short real-life levels about clean streets, safe roads, kind
+              behaviour, and saving water — with Civvy the dolphin cheering you
+              on. Earn XP, keep streaks, collect badges.
+            </p>
+            <div className="mb-8 flex flex-wrap gap-2">
+              {CATEGORY_ORDER.map((cat) => (
+                <span
+                  key={cat}
+                  className="rounded-full border px-3 py-1.5 text-xs font-bold md:text-sm"
+                  style={{
+                    borderColor: "var(--line)",
+                    backgroundColor: "var(--card-soft)",
+                    color: "var(--text-strong)",
+                  }}
+                >
+                  {CATEGORY_META[cat].emoji} {CATEGORY_META[cat].title}
+                </span>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setStep("onboarding")}
+              className="w-full rounded-2xl px-8 py-5 font-[var(--font-montserrat)] text-2xl font-bold transition hover:scale-[1.03] active:scale-[0.97] md:w-auto"
+              style={{
+                backgroundColor: "var(--brand)",
+                color: "var(--on-brand)",
+                boxShadow: "var(--shadow-pop)",
+              }}
+            >
+              Start your quest →
+            </button>
+          </div>
+          <div className="relative flex items-center justify-center">
+            <div
+              className="absolute inset-4 rounded-full opacity-60 blur-3xl"
+              style={{ backgroundColor: "var(--card-softer)" }}
+            />
+            <p
+              className="cq-pop-in absolute -top-1 left-1/2 z-10 -translate-x-1/2 rounded-2xl px-4 py-2 text-sm font-bold shadow-lg md:text-base"
+              style={{
+                backgroundColor: "var(--card)",
+                color: "var(--text-strong)",
+                boxShadow: "var(--shadow-pop)",
+              }}
+            >
               Hello, I&apos;m Civvy 👋
             </p>
             <Image
               src="/Civvy-v2.png"
-              alt="Civvy dolphin"
-              width={220}
-              height={220}
+              alt="Civvy the dolphin, CiviQuest's civic-hero mascot"
+              width={340}
+              height={340}
               priority
-              className="h-32 w-32 object-contain md:h-40 md:w-40"
+              className="cq-float relative h-56 w-56 object-contain md:h-80 md:w-80"
             />
           </div>
-        )}
+        </div>
+      </div>
 
-        <Image
-          src="/cq-logo.png"
-          alt="CiviQuest CQ logo"
-          width={112}
-          height={112}
-          priority
-          className="mb-3 h-16 w-16 object-contain md:h-20 md:w-20"
-        />
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        {[
+          ["🎮", "Play", "10 quick real-life situations per level, 60 seconds each."],
+          ["🧠", "Think", "No exam marks — choose what you would really do."],
+          ["🌟", "Grow", "XP, streaks, and badges turn habits into adventures."],
+        ].map(([emoji, title, text]) => (
+          <div
+            key={title}
+            className="rounded-3xl border p-5 text-left transition hover:-translate-y-1"
+            style={{
+              borderColor: "var(--line)",
+              backgroundColor: "var(--card)",
+              boxShadow: "var(--shadow-pop)",
+            }}
+          >
+            <p className="mb-2 text-3xl">{emoji}</p>
+            <p className="mb-1 text-lg font-black" style={{ color: "var(--text-strong)" }}>
+              {title}
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+              {text}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 
-        <h1 className="mb-2 font-[var(--font-montserrat)] text-4xl font-black tracking-tight leading-[1.2] md:text-5xl">
-          CiviQuest
-        </h1>
-        <p className="mb-6 text-sm md:text-base" style={{ color: "#063E5F" }}>
-          Learn real-world civic skills through mini game levels.
+  const onboardingScreen = (
+    <section
+      className="cq-slide-up mx-auto w-full max-w-3xl rounded-[34px] border p-6 text-left md:p-8"
+      style={{
+        borderColor: "var(--line)",
+        backgroundColor: "var(--card)",
+        boxShadow: "var(--shadow)",
+      }}
+    >
+      <h2
+        className="mb-1 font-[var(--font-montserrat)] text-2xl font-black md:text-3xl"
+        style={{ color: "var(--text-strong)" }}
+      >
+        Tell Civvy about you 🐬
+      </h2>
+      <p className="mb-5 text-sm" style={{ color: "var(--text-soft)" }}>
+        This helps us pick the right questions for your class.
+      </p>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">Name</span>
+          <input
+            type="text"
+            value={profile.name}
+            onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+            placeholder="Enter your name"
+            className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
+            style={{
+              borderColor: "var(--line)",
+              backgroundColor: "var(--card-soft)",
+              color: "var(--text)",
+            }}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">Age</span>
+          <input
+            type="number"
+            min="9"
+            max="15"
+            value={profile.age}
+            onChange={(e) => setProfile({ ...profile, age: e.target.value })}
+            placeholder="10 to 14"
+            className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
+            style={{
+              borderColor: "var(--line)",
+              backgroundColor: "var(--card-soft)",
+              color: "var(--text)",
+            }}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">School</span>
+          <input
+            type="text"
+            value={profile.school}
+            onChange={(e) => setProfile({ ...profile, school: e.target.value })}
+            placeholder="Enter school name"
+            className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
+            style={{
+              borderColor: "var(--line)",
+              backgroundColor: "var(--card-soft)",
+              color: "var(--text)",
+            }}
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">Class</span>
+          <select
+            value={profile.className}
+            onChange={(e) =>
+              setProfile({ ...profile, className: e.target.value })
+            }
+            className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
+            style={{
+              borderColor: "var(--line)",
+              backgroundColor: "var(--card-soft)",
+              color: "var(--text)",
+            }}
+          >
+            <option value="">Select class</option>
+            <option value="5">Class 5</option>
+            <option value="6">Class 6</option>
+            <option value="7">Class 7</option>
+            <option value="8">Class 8</option>
+          </select>
+        </label>
+      </div>
+
+      <div
+        className="mt-4 rounded-2xl border p-4"
+        style={{ borderColor: "var(--line)", backgroundColor: "var(--card-soft)" }}
+      >
+        <p className="mb-1 text-sm font-bold" style={{ color: "var(--text-strong)" }}>
+          Parent or guardian permission
         </p>
+        <p className="mb-3 text-xs" style={{ color: "var(--text-faint)" }}>
+          We only save quiz answers for our civic-education research with a
+          parent or guardian&apos;s okay. The email is just for consent and
+          won&apos;t be shared or used for marketing — you can ask us to delete
+          it anytime.
+        </p>
+        <label className="block">
+          <span className="mb-1 block text-sm font-semibold">
+            Parent/guardian email
+          </span>
+          <input
+            type="email"
+            value={profile.parentEmail}
+            onChange={(e) =>
+              setProfile({ ...profile, parentEmail: e.target.value })
+            }
+            placeholder="parent@example.com"
+            className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
+            style={{
+              borderColor: "var(--line)",
+              backgroundColor: "var(--card)",
+              color: "var(--text)",
+            }}
+          />
+        </label>
+        <label className="mt-3 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={profile.parentConsent}
+            onChange={(e) =>
+              setProfile({ ...profile, parentConsent: e.target.checked })
+            }
+            className="mt-1 h-5 w-5 shrink-0"
+          />
+          <span style={{ color: "var(--text-strong)" }}>
+            I am a parent/guardian and I agree to let CiviQuest save my
+            child&apos;s quiz answers for this research study.
+          </span>
+        </label>
+      </div>
 
-        {step === "start" && (
-          <section className="w-full">
-            <button
-              type="button"
-              onClick={() => setStep("form")}
-              className="min-h-[52px] w-full rounded-2xl px-6 py-5 font-[var(--font-montserrat)] text-2xl font-bold text-white transition hover:scale-[1.02] active:scale-[0.98]"
-              style={{ backgroundColor: "#4296CD" }}
-            >
-              Play
-            </button>
-          </section>
-        )}
+      <button
+        type="button"
+        disabled={!formValid}
+        onClick={() => {
+          saveProfile(profile);
+          setHasProfile(true);
+          setStep("map");
+        }}
+        className="mt-5 min-h-[52px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
+      >
+        Open the Quest Map →
+      </button>
+    </section>
+  );
 
-        {step === "form" && (
-          <section className="w-full space-y-4 text-left">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold">Name</span>
-                <input
-                  type="text"
-                  value={userInfo.name}
-                  onChange={(event) => handleFormChange("name", event.target.value)}
-                  placeholder="Enter your name"
-                  className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-                  style={{ borderColor: "#E5F6FF" }}
-                />
-              </label>
+  const mapScreen = (
+    <section className="cq-slide-up mx-auto w-full max-w-3xl">
+      <div
+        className="mb-6 flex items-center gap-4 rounded-3xl border p-4 md:p-5"
+        style={{
+          borderColor: "var(--line)",
+          backgroundColor: "var(--card)",
+          boxShadow: "var(--shadow-pop)",
+        }}
+      >
+        <Image
+          src="/Civvy-v2.png"
+          alt=""
+          width={80}
+          height={80}
+          priority
+          className="cq-float h-16 w-16 object-contain md:h-20 md:w-20"
+        />
+        <div className="text-left">
+          <p className="text-lg font-black md:text-xl" style={{ color: "var(--text-strong)" }}>
+            Hi {profile.name.split(" ")[0] || "explorer"}! 🌊
+          </p>
+          <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+            {unlockIndex === 0
+              ? "Your quest starts with Clean Streets. Ready?"
+              : unlockIndex >= CATEGORY_ORDER.length
+                ? "All levels explored! Replay any level to beat your stars."
+                : `Next stop: ${CATEGORY_META[CATEGORY_ORDER[unlockIndex]].title}!`}
+          </p>
+        </div>
+      </div>
 
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold">Age</span>
-                <input
-                  type="number"
-                  min="10"
-                  max="14"
-                  value={userInfo.age}
-                  onChange={(event) => handleFormChange("age", event.target.value)}
-                  placeholder="10 to 14"
-                  className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-                  style={{ borderColor: "#E5F6FF" }}
-                />
-              </label>
+      <div className="relative">
+        <svg
+          aria-hidden
+          className="absolute left-1/2 top-0 h-full w-2 -translate-x-1/2"
+          preserveAspectRatio="none"
+          viewBox="0 0 4 100"
+        >
+          <line
+            x1="2"
+            y1="0"
+            x2="2"
+            y2="100"
+            stroke="var(--line)"
+            strokeWidth="4"
+            strokeDasharray="8 16"
+            strokeLinecap="round"
+            className="cq-path-dash"
+          />
+        </svg>
 
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold">School</span>
-                <input
-                  type="text"
-                  value={userInfo.school}
-                  onChange={(event) =>
-                    handleFormChange("school", event.target.value)
-                  }
-                  placeholder="Enter school name"
-                  className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-                  style={{ borderColor: "#E5F6FF" }}
-                />
-              </label>
-
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold">Class</span>
-                <select
-                  value={userInfo.className}
-                  onChange={(event) =>
-                    handleFormChange("className", event.target.value)
-                  }
-                  className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-                  style={{ borderColor: "#E5F6FF" }}
+        <ol className="relative space-y-5">
+          {CATEGORY_ORDER.map((cat, index) => {
+            const meta = CATEGORY_META[cat];
+            const unlocked = index <= unlockIndex;
+            const played = Boolean(progress.levels[cat]);
+            const stars = starsFor(cat);
+            const side = index % 2 === 0 ? "md:mr-auto" : "md:ml-auto";
+            return (
+              <li key={cat} className={`relative md:w-[calc(50%+56px)] ${side}`}>
+                <button
+                  type="button"
+                  disabled={!unlocked}
+                  onClick={() => startLevel(cat)}
+                  className="group flex w-full items-center gap-4 rounded-3xl border p-4 text-left transition enabled:hover:-translate-y-1 enabled:hover:shadow-lg disabled:opacity-55 md:p-5"
+                  style={{
+                    borderColor: "var(--line)",
+                    backgroundColor: "var(--card)",
+                    boxShadow: "var(--shadow-pop)",
+                  }}
                 >
-                  <option value="">Select class</option>
-                  <option value="5">Class 5</option>
-                  <option value="6">Class 6</option>
-                  <option value="7">Class 7</option>
-                  <option value="8">Class 8</option>
-                  <option value="9">Class 9</option>
-                </select>
-              </label>
-            </div>
+                  <span
+                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 text-3xl transition group-enabled:group-hover:scale-110"
+                    style={{
+                      backgroundColor: unlocked ? meta.color : "var(--card-softer)",
+                      borderColor: "var(--card)",
+                      boxShadow: "var(--shadow-pop)",
+                    }}
+                  >
+                    {unlocked ? meta.emoji : "🔒"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className="block text-xs font-bold uppercase tracking-wider"
+                      style={{ color: "var(--brand-strong)" }}
+                    >
+                      Level {index + 1}
+                    </span>
+                    <span
+                      className="block truncate text-lg font-black md:text-xl"
+                      style={{ color: "var(--text-strong)" }}
+                    >
+                      {meta.title}
+                    </span>
+                    <span className="block text-xs md:text-sm" style={{ color: "var(--text-soft)" }}>
+                      {meta.subtitle}
+                    </span>
+                    <span className="mt-1 block text-sm tracking-widest" aria-label={`${stars} of 3 stars`}>
+                      {"★".repeat(stars)}
+                      <span style={{ color: "var(--text-faint)", opacity: 0.4 }}>
+                        {"★".repeat(3 - stars)}
+                      </span>
+                    </span>
+                  </span>
+                  <span
+                    className="shrink-0 rounded-full px-4 py-2 text-sm font-bold"
+                    style={
+                      unlocked
+                        ? { backgroundColor: "var(--brand)", color: "var(--on-brand)" }
+                        : { backgroundColor: "var(--card-softer)", color: "var(--text-faint)" }
+                    }
+                  >
+                    {played ? "Replay" : unlocked ? "Start" : "Locked"}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
 
+      <p className="mt-5 text-center text-xs md:text-sm" style={{ color: "var(--text-faint)" }}>
+        Finish a level to unlock the next — 10 missions each, 60 seconds per
+        mission.
+      </p>
+    </section>
+  );
+
+  const quizScreen = question && category && (
+    <section
+      className="cq-slide-up mx-auto w-full max-w-5xl rounded-[34px] border p-5 md:p-8"
+      style={{
+        borderColor: "var(--line)",
+        backgroundColor: "var(--card)",
+        boxShadow: "var(--shadow)",
+      }}
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0 text-left">
+          <p className="truncate text-xs font-bold uppercase tracking-wider" style={{ color: "var(--brand-strong)" }}>
+            {CATEGORY_META[category].emoji} {CATEGORY_META[category].title} ·
+            Mission {qIndex + 1} of {questions.length}
+          </p>
+          <div
+            className="mt-2 h-2.5 w-40 overflow-hidden rounded-full md:w-64"
+            style={{ backgroundColor: "var(--card-softer)" }}
+            role="progressbar"
+            aria-valuenow={qIndex + 1}
+            aria-valuemin={1}
+            aria-valuemax={questions.length}
+          >
             <div
-              className="rounded-2xl border p-4"
-              style={{ borderColor: "#E5F6FF", backgroundColor: "#f7fcff" }}
-            >
-              <p className="mb-1 text-sm font-bold text-[#063E5F]">
-                Parent or guardian permission
-              </p>
-              <p className="mb-3 text-xs text-[#4d6e86]">
-                We only save quiz answers for our civic-education research with a
-                parent or guardian&apos;s okay. Your email is just for consent and
-                won&apos;t be shared or used for marketing — you can ask us to
-                delete it anytime.
-              </p>
-              <label className="block">
-                <span className="mb-1 block text-sm font-semibold">
-                  Parent/guardian email
-                </span>
-                <input
-                  type="email"
-                  value={userInfo.parentEmail}
-                  onChange={(event) =>
-                    handleFormChange("parentEmail", event.target.value)
-                  }
-                  placeholder="parent@example.com"
-                  className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-                  style={{ borderColor: "#E5F6FF" }}
-                />
-              </label>
-              <label className="mt-3 flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={userInfo.parentConsent}
-                  onChange={(event) =>
-                    handleFormChange("parentConsent", event.target.checked)
-                  }
-                  className="mt-1 h-5 w-5 shrink-0"
-                />
-                <span className="text-[#063E5F]">
-                  I am a parent/guardian and I agree to let CiviQuest save my
-                  child&apos;s quiz answers for this research study.
-                </span>
-              </label>
-            </div>
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${((qIndex + (phase === "revealed" ? 1 : 0)) / questions.length) * 100}%`,
+                backgroundColor: "var(--brand)",
+              }}
+            />
+          </div>
+        </div>
+        <span
+          className={`rounded-full px-4 py-2 text-base font-black tabular-nums md:text-lg ${
+            phase === "answering" && timeLeft <= 10 ? "cq-pulse-danger" : ""
+          }`}
+          style={{
+            backgroundColor:
+              phase === "revealed"
+                ? "var(--card-softer)"
+                : timeLeft <= 10
+                  ? "var(--wrong-bg)"
+                  : timeLeft <= 20
+                    ? "var(--gold)"
+                    : "var(--brand)",
+            color:
+              phase === "revealed"
+                ? "var(--text-faint)"
+                : timeLeft <= 10
+                  ? "var(--wrong-text)"
+                  : timeLeft <= 20
+                    ? "#5b4300"
+                    : "var(--on-brand)",
+          }}
+          aria-label={`${timeLeft} seconds left`}
+        >
+          ⏱ {phase === "revealed" ? "—" : `${timeLeft}s`}
+        </span>
+      </div>
 
+      <div className="md:grid md:grid-cols-2 md:items-start md:gap-10">
+        <h2
+          className="mb-6 text-left text-xl font-black leading-[1.4] md:mb-0 md:text-2xl lg:text-3xl"
+          style={{ color: "var(--text-strong)" }}
+        >
+          {question.question}
+        </h2>
+
+        <div>
+          <div className="space-y-3">
+            {question.options.map((option, idx) => {
+              const picked = answers[question.id] === idx;
+              const revealed = phase === "revealed";
+              const isCorrectOption = idx === question.correct;
+              let bg = "var(--card-softer)";
+              let border = "var(--line)";
+              let color = "var(--text-strong)";
+              if (revealed && isCorrectOption) {
+                bg = "var(--correct-bg)";
+                border = "var(--correct-line)";
+                color = "var(--correct-text)";
+              } else if (revealed && picked && !isCorrectOption) {
+                bg = "var(--wrong-bg)";
+                border = "var(--wrong-line)";
+                color = "var(--wrong-text)";
+              } else if (picked) {
+                bg = "var(--brand)";
+                border = "var(--brand)";
+                color = "var(--on-brand)";
+              }
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  disabled={revealed}
+                  onClick={() =>
+                    setAnswers((prev) => ({ ...prev, [question.id]: idx }))
+                  }
+                  className="w-full rounded-xl border-2 px-5 py-4 text-left text-base font-bold transition-all duration-200 enabled:hover:-translate-y-0.5 enabled:active:scale-[0.98] md:text-lg"
+                  style={{ backgroundColor: bg, borderColor: border, color }}
+                >
+                  {revealed && isCorrectOption ? "✅ " : ""}
+                  {revealed && picked && !isCorrectOption ? "❌ " : ""}
+                  {option}
+                </button>
+              );
+            })}
+          </div>
+
+          {phase === "answering" && typeof answers[question.id] === "number" && (
+            <div className="cq-slide-up mt-6 text-left">
+              <p className="mb-2 text-sm font-bold md:text-base" style={{ color: "var(--text-strong)" }}>
+                How sure are you?
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                {CONFIDENCE_OPTIONS.map((option) => {
+                  const picked = confidences[question.id] === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() =>
+                        setConfidences((prev) => ({
+                          ...prev,
+                          [question.id]: option,
+                        }))
+                      }
+                      className="flex-1 rounded-xl border-2 px-4 py-2.5 text-sm font-bold transition hover:scale-[1.03] active:scale-95 md:text-base"
+                      style={
+                        picked
+                          ? {
+                              backgroundColor: "var(--brand-strong)",
+                              borderColor: "var(--brand-strong)",
+                              color: "var(--on-brand)",
+                            }
+                          : {
+                              backgroundColor: "var(--card)",
+                              borderColor: "var(--line)",
+                              color: "var(--text-strong)",
+                            }
+                      }
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {phase === "answering" ? (
             <button
               type="button"
-              onClick={() => setStep("levels")}
               disabled={
-                !userInfo.name ||
-                !userInfo.age ||
-                !userInfo.school ||
-                !userInfo.className ||
-                !userInfo.parentConsent ||
-                !EMAIL_PATTERN.test(userInfo.parentEmail)
+                typeof answers[question.id] !== "number" ||
+                !confidences[question.id]
               }
-              className="mt-3 min-h-[52px] w-full rounded-2xl px-6 py-5 font-[var(--font-montserrat)] text-xl font-bold text-white transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ backgroundColor: "#4296CD" }}
+              onClick={check}
+              className="mt-6 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
             >
-              Continue
+              Check ✓
             </button>
-          </section>
-        )}
-
-        {step === "levels" && (
-          <section className="w-full text-left">
-            <p className="mb-4 rounded-2xl bg-[#E5F6FF] px-4 py-3 text-sm font-semibold text-[#063E5F] md:text-base">
-              Pick your level, just like a game map. You can finish one level now
-              and come back for the next.
-            </p>
-            <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-2">
-              {LEVELS.map((level, index) => {
-                const isLast = index === LEVELS.length - 1;
-                return (
-                  <div key={`${level.id}-node`} className="flex items-center gap-2">
-                    <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-4 border-white text-xl shadow-md"
-                      style={{ backgroundColor: level.color }}
-                    >
-                      {level.emoji}
-                    </div>
-                    {!isLast && (
-                      <div className="h-2 w-12 shrink-0 rounded-full bg-[#cfe8f8]" />
+          ) : (
+            <div className="cq-pop-in mt-6 text-left">
+              <div
+                className="rounded-2xl border-2 p-4"
+                style={
+                  timedOutIds.includes(question.id)
+                    ? {
+                        backgroundColor: "var(--card-softer)",
+                        borderColor: "var(--line)",
+                      }
+                    : answers[question.id] === question.correct
+                      ? {
+                          backgroundColor: "var(--correct-bg)",
+                          borderColor: "var(--correct-line)",
+                        }
+                      : {
+                          backgroundColor: "var(--wrong-bg)",
+                          borderColor: "var(--wrong-line)",
+                        }
+                }
+              >
+                <p className="mb-1 font-black" style={{ color: "var(--text-strong)" }}>
+                  {timedOutIds.includes(question.id)
+                    ? "⏰ Time's up for this one!"
+                    : answers[question.id] === question.correct
+                      ? CHEER_CORRECT[question.id % CHEER_CORRECT.length]
+                      : CHEER_WRONG[question.id % CHEER_WRONG.length]}
+                  {answers[question.id] === question.correct &&
+                    !timedOutIds.includes(question.id) && (
+                      <span className="cq-xp-rise ml-2 inline-block font-black" style={{ color: "var(--gold)" }}>
+                        +10 XP
+                      </span>
                     )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mb-5 flex gap-4 overflow-x-auto pb-1">
-              {LEVELS.map((level) => {
-                const questionCount = QUESTIONS.filter(
-                  (question) => question.category === level.id,
-                ).length;
-                return (
-                  <button
-                    key={level.id}
-                    type="button"
-                    onClick={(event) => startQuiz(level.id, event.timeStamp)}
-                    className="min-w-[264px] flex-1 rounded-3xl border border-[#d7ecf8] bg-white p-4 text-left shadow-[0_12px_24px_rgba(6,62,95,0.12)] transition hover:-translate-y-0.5"
-                  >
-                    <p className="text-2xl">{level.emoji}</p>
-                    <p className="mt-2 text-lg font-black text-[#063E5F]">
-                      {level.title}
-                    </p>
-                    <p className="mt-1 text-sm text-[#37556d]">{level.subtitle}</p>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span
-                        className="rounded-full px-3 py-1 text-xs font-bold text-white"
-                        style={{ backgroundColor: level.color }}
-                      >
-                        {questionCount} missions
-                      </span>
-                      <span className="text-sm font-bold text-[#2589C9]">
-                        Start →
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-[#4f6c83] md:text-sm">
-              Designed for classes 5–8: shorter levels, bigger buttons, and kid-friendly language.
-            </p>
-          </section>
-        )}
-
-        {step === "quiz" && currentQuestion && (
-          <section className="w-full">
-            <div className="relative w-full rounded-[28px] border border-[#dbeef9] bg-white px-5 pb-10 pt-5 text-center shadow-[0_24px_60px_rgba(6,62,95,0.14)] md:px-8 md:pt-6">
-              <div className="mb-4 flex justify-end">
-                <span className="rounded-full bg-[#4296CD] px-4 py-2 text-sm font-bold text-white shadow-sm">
-                  {timeLeft}s
-                </span>
+                </p>
+                <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+                  {question.feedback}
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={continueNext}
+                autoFocus
+                className="mt-4 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition hover:scale-[1.02] active:scale-[0.98]"
+                style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
+              >
+                {qIndex === questions.length - 1 ? "See results 🏁" : "Continue →"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 
-              <div className="md:grid md:grid-cols-2 md:items-start md:gap-8 lg:gap-10">
-                <div>
-                  {activeLevelMeta && (
-                    <div className="mb-4 rounded-2xl bg-[#f4fbff] px-3 py-2 text-left">
-                      <p className="text-xs font-bold uppercase tracking-wide text-[#2589C9]">
-                        {activeLevelMeta.title}
-                      </p>
-                      <p className="text-xs text-[#3d5f78]">{activeLevelMeta.subtitle}</p>
-                    </div>
-                  )}
+  const resultScreen = category && (
+    <section
+      className="cq-slide-up relative mx-auto w-full max-w-3xl overflow-hidden rounded-[34px] border p-6 text-center md:p-8"
+      style={{
+        borderColor: "var(--line)",
+        backgroundColor: "var(--card)",
+        boxShadow: "var(--shadow)",
+      }}
+    >
+      {scorePercent >= 0.7 && <Confetti />}
+      <Image
+        src="/Civvy-v2.png"
+        alt="Civvy celebrating"
+        width={160}
+        height={160}
+        className="cq-float mx-auto mb-3 h-28 w-28 object-contain md:h-32 md:w-32"
+      />
+      <h2
+        className="mb-2 font-[var(--font-montserrat)] text-3xl font-black md:text-4xl"
+        style={{ color: "var(--text-strong)" }}
+      >
+        {scorePercent >= 0.8
+          ? "Civic Champion! 🏆"
+          : scorePercent >= 0.5
+            ? "Rising Civic Star 🌟"
+            : "Quest complete — thanks for sharing! 💙"}
+      </h2>
+      <p className="mb-1 text-lg font-bold" style={{ color: "var(--text-strong)" }}>
+        {finalScore} of {questions.length} community-friendly picks ·{" "}
+        {"★".repeat(starsFor(category))}
+      </p>
+      <p className="mb-4 text-sm" style={{ color: "var(--text-soft)" }}>
+        Time: {timeTaken}s · XP earned:{" "}
+        <span className="font-black" style={{ color: "var(--gold)" }}>
+          +{xpEarned}
+        </span>
+      </p>
 
-                  <div className="mb-4 text-left">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-sm font-bold text-[#2589C9] md:text-base">
-                        Question {currentQuestionIndex + 1} of {activeQuestions.length}
-                      </p>
-                      <span className="text-xs font-semibold text-[#063E5F] md:text-sm">
-                        {Math.round(progressFraction * 100)}%
+      {newBadges.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
+          {newBadges.map((id) => {
+            const badge = BADGES.find((b) => b.id === id);
+            if (!badge) return null;
+            return (
+              <span
+                key={id}
+                className="cq-pop-in flex items-center gap-2 rounded-full border-2 px-4 py-2 text-sm font-black"
+                style={{
+                  borderColor: "var(--gold)",
+                  backgroundColor: "var(--card-soft)",
+                  color: "var(--text-strong)",
+                }}
+              >
+                <span className="text-xl">{badge.emoji}</span> New badge:{" "}
+                {badge.title}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {saveNotice && (
+        <p className="mb-4 text-sm font-semibold" style={{ color: "var(--correct-text)" }}>
+          {saveNotice}
+        </p>
+      )}
+
+      <div className="max-h-64 space-y-2 overflow-auto pr-1 text-left">
+        {questions.map((q, index) => {
+          const selectedIndex = answers[q.id];
+          const selected =
+            typeof selectedIndex === "number"
+              ? q.options[selectedIndex]
+              : "Not answered";
+          const isCorrect = selectedIndex === q.correct;
+          return (
+            <div
+              key={q.id}
+              className="rounded-xl border p-3"
+              style={{
+                borderColor: isCorrect ? "var(--correct-line)" : "var(--wrong-line)",
+                backgroundColor: isCorrect ? "var(--correct-bg)" : "var(--wrong-bg)",
+              }}
+            >
+              <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                {index + 1}. {q.question}
+              </p>
+              <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+                Your answer: {selected}
+              </p>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-soft)" }}>
+                {encouragingMessageForRow(isCorrect, q.id)}{" "}
+                {isCorrect
+                  ? q.feedback
+                  : `A choice that often works: ${q.options[q.correct]}`}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setStep("map")}
+        className="mt-5 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition hover:scale-[1.02] active:scale-[0.98]"
+        style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
+      >
+        Back to Quest Map 🗺️
+      </button>
+    </section>
+  );
+
+  const badgesScreen = (
+    <section className="cq-slide-up mx-auto w-full max-w-3xl">
+      <h2
+        className="mb-4 text-left font-[var(--font-montserrat)] text-2xl font-black md:text-3xl"
+        style={{ color: "var(--text-strong)" }}
+      >
+        Badge Reef 🏆
+      </h2>
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+        {BADGES.map((badge) => {
+          const earned = progress.badges.includes(badge.id);
+          return (
+            <div
+              key={badge.id}
+              className={`rounded-3xl border p-5 text-center transition hover:-translate-y-1 ${
+                earned ? "" : "opacity-55 grayscale"
+              }`}
+              style={{
+                borderColor: earned ? "var(--gold)" : "var(--line)",
+                backgroundColor: "var(--card)",
+                boxShadow: "var(--shadow-pop)",
+              }}
+            >
+              <p className="mb-2 text-4xl">{earned ? badge.emoji : "❔"}</p>
+              <p className="font-black" style={{ color: "var(--text-strong)" }}>
+                {badge.title}
+              </p>
+              <p className="mt-1 text-xs" style={{ color: "var(--text-soft)" }}>
+                {badge.hint}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+      {progress.badges.length === 0 && (
+        <p className="mt-5 text-center text-sm" style={{ color: "var(--text-faint)" }}>
+          Play your first level to start collecting badges!
+        </p>
+      )}
+    </section>
+  );
+
+  const profileScreen = (
+    <section className="cq-slide-up mx-auto w-full max-w-3xl text-left">
+      {!hasProfile ? (
+        <div
+          className="rounded-[34px] border p-8 text-center"
+          style={{
+            borderColor: "var(--line)",
+            backgroundColor: "var(--card)",
+            boxShadow: "var(--shadow)",
+          }}
+        >
+          <p className="mb-4 text-5xl">🐬</p>
+          <p className="mb-4 font-bold" style={{ color: "var(--text-strong)" }}>
+            No explorer profile yet — start your quest to create one!
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setTab("home");
+              setStep("onboarding");
+            }}
+            className="rounded-2xl px-6 py-3 font-bold"
+            style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
+          >
+            Start now →
+          </button>
+        </div>
+      ) : (
+        <>
+          <div
+            className="mb-4 flex items-center gap-4 rounded-[34px] border p-6"
+            style={{
+              borderColor: "var(--line)",
+              backgroundColor: "var(--card)",
+              boxShadow: "var(--shadow)",
+            }}
+          >
+            <span
+              className="flex h-20 w-20 items-center justify-center rounded-full text-4xl"
+              style={{ backgroundColor: "var(--card-softer)" }}
+            >
+              🐬
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-2xl font-black" style={{ color: "var(--text-strong)" }}>
+                {profile.name}
+              </p>
+              <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+                Class {profile.className} · {profile.school}
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+            {[
+              ["⭐", String(progress.xp), "XP"],
+              ["🔥", String(progress.streak.count), "Day streak"],
+              ["🏆", String(progress.badges.length), "Badges"],
+              [
+                "🗺️",
+                `${Object.keys(progress.levels).length}/${CATEGORY_ORDER.length}`,
+                "Levels",
+              ],
+            ].map(([emoji, value, label]) => (
+              <div
+                key={label}
+                className="rounded-2xl border p-4 text-center"
+                style={{
+                  borderColor: "var(--line)",
+                  backgroundColor: "var(--card)",
+                }}
+              >
+                <p className="text-2xl">{emoji}</p>
+                <p className="text-xl font-black" style={{ color: "var(--text-strong)" }}>
+                  {value}
+                </p>
+                <p className="text-xs" style={{ color: "var(--text-faint)" }}>
+                  {label}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="mb-4 rounded-3xl border p-5"
+            style={{ borderColor: "var(--line)", backgroundColor: "var(--card)" }}
+          >
+            <p className="mb-3 font-black" style={{ color: "var(--text-strong)" }}>
+              Level bests
+            </p>
+            <div className="space-y-3">
+              {CATEGORY_ORDER.map((cat) => {
+                const meta = CATEGORY_META[cat];
+                const level = progress.levels[cat];
+                const pct = level
+                  ? Math.round((level.bestScore / level.totalQuestions) * 100)
+                  : 0;
+                return (
+                  <div key={cat}>
+                    <div className="mb-1 flex justify-between text-sm font-semibold">
+                      <span style={{ color: "var(--text-strong)" }}>
+                        {meta.emoji} {meta.title}
+                      </span>
+                      <span style={{ color: "var(--text-soft)" }}>
+                        {level
+                          ? `${level.bestScore}/${level.totalQuestions}`
+                          : "Not played"}
                       </span>
                     </div>
                     <div
-                      className="h-3 w-full overflow-hidden rounded-full bg-[#E5F6FF]"
-                      role="progressbar"
-                      aria-valuenow={currentQuestionIndex + 1}
-                      aria-valuemin={1}
-                      aria-valuemax={activeQuestions.length}
+                      className="h-2.5 overflow-hidden rounded-full"
+                      style={{ backgroundColor: "var(--card-softer)" }}
                     >
                       <div
-                        className="h-full rounded-full bg-[#4296CD] transition-all duration-300 ease-out"
-                        style={{ width: `${progressFraction * 100}%` }}
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{ width: `${pct}%`, backgroundColor: meta.color }}
                       />
                     </div>
                   </div>
-
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#2589C9]">
-                    {currentQuestion.category.replaceAll("_", " ")}
-                  </p>
-
-                  <h2 className="mb-8 text-2xl font-black leading-[1.35] text-[#063E5F] md:mb-0 md:text-3xl">
-                    {currentQuestion.question}
-                  </h2>
-                </div>
-
-                <div>
-                  <div className="space-y-4">
-                    {currentQuestion.options.map((option, optionIndex) => {
-                      const isSelected =
-                        answers[currentQuestion.id] === optionIndex;
-                      const hasRecentClick = recentlySelectedOption === option;
-                      return (
-                        <button
-                          key={option}
-                          type="button"
-                          onClick={() => selectAnswer(optionIndex)}
-                          className={`min-h-[56px] w-full rounded-xl border-2 px-5 py-5 text-left text-lg font-bold transition-all duration-200 ease-out md:text-xl ${
-                            hasRecentClick ? "scale-[0.98]" : "scale-100"
-                          } ${
-                            isSelected
-                              ? "border-[#4296CD] bg-[#4296CD] text-white shadow-md"
-                              : "border-[#E5F6FF] bg-[#E5F6FF] text-[#063E5F] hover:border-[#4296CD] hover:bg-[#4296CD] hover:text-white active:scale-[0.98]"
-                          }`}
-                          style={{
-                            transformOrigin: "center",
-                          }}
-                        >
-                          {option}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {typeof answers[currentQuestion.id] === "number" && (
-                    <div className="mt-8 space-y-3 text-left">
-                      <p className="text-center text-base font-bold text-[#063E5F] md:text-lg">
-                        How sure do you feel about that pick?
-                      </p>
-                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
-                        {CONFIDENCE_OPTIONS.map((option) => {
-                          const picked =
-                            confidenceByQuestion[currentQuestion.id] === option;
-                          return (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() => setConfidence(option)}
-                              className={`min-h-[52px] flex-1 rounded-2xl border-2 px-4 py-3 text-center text-base font-bold transition hover:scale-[1.02] active:scale-[0.98] sm:min-w-[140px] ${
-                                picked
-                                  ? "border-[#2589C9] bg-[#2589C9] text-white shadow-md"
-                                  : "border-[#E5F6FF] bg-white text-[#063E5F]"
-                              }`}
-                            >
-                              {option}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={goToNextQuestion}
-                    disabled={!canAdvanceQuestion}
-                    className="mt-8 min-h-[56px] w-full rounded-2xl px-6 py-5 font-[var(--font-montserrat)] text-xl font-bold text-white transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                    style={{ backgroundColor: "#4296CD" }}
-                  >
-                    {currentQuestionIndex === activeQuestions.length - 1
-                      ? "Submit"
-                      : "Next question"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {step === "result" && (
-          <section
-            className="w-full rounded-2xl p-6 text-left"
-            style={{ backgroundColor: "#F4FBFF" }}
-          >
-            <h2 className="mb-2 text-center font-[var(--font-montserrat)] text-3xl font-black leading-[1.25]">
-              {resultHeadline}
-            </h2>
-            <p className="mb-2 text-center text-lg font-bold text-[#063E5F]">
-              You shared{" "}
-              <span className="text-[#4296CD]">{finalScore}</span> out of{" "}
-              {activeQuestions.length} picks that match our “kind to community”
-              coding — like collecting stars in a game, not like an exam score.
-            </p>
-            <p className="mb-4 text-center text-sm" style={{ color: "#063E5F" }}>
-              {resultStatus === "Time Up"
-                ? "Time ran out — thanks for every answer you gave!"
-                : "Great job finishing all the stories!"}
-            </p>
-            <p className="mb-6 text-center text-base" style={{ color: "#063E5F" }}>
-              Total time: {timeTaken}s
-            </p>
-
-            <Image
-              src="/Civvy-v2.png"
-              alt="Civvy dolphin"
-              width={160}
-              height={160}
-              className="mx-auto mb-4 h-24 w-24 object-contain md:h-28 md:w-28"
-            />
-
-            {saveNotice && (
-              <p
-                className="mb-4 text-center text-sm font-semibold"
-                style={{ color: "#063E5F" }}
-              >
-                {saveNotice}
-              </p>
-            )}
-
-            {resultTips.length > 0 && (
-              <div
-                className="mb-5 rounded-2xl border border-[#cdebd1] bg-white px-4 py-4"
-                style={{ borderColor: "#cdebd1" }}
-              >
-                <p className="mb-2 font-bold text-[#063E5F]">Civvy&apos;s tips</p>
-                <ul className="list-inside list-disc space-y-2 text-sm text-[#1E2C3B]">
-                  {resultTips.map((tip) => (
-                    <li key={tip}>{tip}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="max-h-60 space-y-2 overflow-auto pr-1">
-              {activeQuestions.map((question, index) => {
-                const selectedIndex = answers[question.id];
-                const selected =
-                  typeof selectedIndex === "number"
-                    ? question.options[selectedIndex]
-                    : "Not answered";
-                const correctAnswer = question.options[question.correct];
-                const isCorrect = selectedIndex === question.correct;
-                return (
-                  <div
-                    key={question.id}
-                    className="rounded-xl border p-3"
-                    style={{
-                      borderColor: isCorrect ? "#cdebd1" : "#f6c8c8",
-                      backgroundColor: isCorrect ? "#edf9ef" : "#fff1f1",
-                    }}
-                  >
-                    <p className="font-semibold">
-                      {index + 1}. {question.question}
-                    </p>
-                    <p className="text-sm">Your answer: {selected}</p>
-                    <p className="mt-1 text-sm font-medium text-[#555]">
-                      {encouragingMessageForRow(isCorrect, question.id)}
-                    </p>
-                    {isCorrect ? (
-                      <p className="mt-1 text-sm text-[#555]">{question.feedback}</p>
-                    ) : (
-                      <p className="text-sm text-[#555]">
-                        Another choice that often works well:{" "}
-                        <span className="font-semibold">{correctAnswer}</span>
-                      </p>
-                    )}
-                  </div>
                 );
               })}
             </div>
+          </div>
 
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
-              onClick={restartApp}
-              className="mt-5 min-h-[56px] w-full rounded-2xl px-6 py-5 font-[var(--font-montserrat)] text-xl font-bold text-white transition hover:scale-[1.02] active:scale-[0.98]"
-              style={{ backgroundColor: "#4296CD" }}
+              onClick={() => {
+                setTab("home");
+                setStep("onboarding");
+              }}
+              className="flex-1 rounded-2xl border px-5 py-3 font-bold transition hover:scale-[1.02]"
+              style={{
+                borderColor: "var(--line)",
+                backgroundColor: "var(--card)",
+                color: "var(--text-strong)",
+              }}
             >
-              Back to Level Map
+              ✏️ Edit details
             </button>
-          </section>
-        )}
-
-        {(step === "levels" || step === "quiz" || step === "result") && (
-          <div className="mt-auto pt-5">
-            <div className="flex items-center justify-around rounded-2xl border border-[#d9ebf7] bg-[#f7fcff] px-3 py-2 text-xs font-bold text-[#4d6e86]">
-              <Link
-                href="/"
-                className="transition hover:text-[#063E5F]"
-              >
-                🏠 Home
-              </Link>
-              <span>🗺️ Levels</span>
-              <span>🏆 Badges</span>
-              <span>👤 Profile</span>
-            </div>
+            <Link
+              href="/teacher"
+              className="flex-1 rounded-2xl px-5 py-3 text-center font-bold transition hover:scale-[1.02]"
+              style={{ backgroundColor: "var(--brand-strong)", color: "var(--on-brand)" }}
+            >
+              🧑‍🏫 Teacher? Open class dashboard
+            </Link>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Reset this device's profile and progress? Saved research answers stay in the study database (parents can email us to remove them).",
+                )
+              ) {
+                clearProfile();
+                setProfile(EMPTY_PROFILE);
+                setHasProfile(false);
+                setProgress(EMPTY_PROGRESS);
+                setTab("home");
+                setStep("hero");
+              }
+            }}
+            className="mt-3 w-full rounded-2xl px-5 py-3 text-sm font-semibold transition hover:scale-[1.01]"
+            style={{ color: "var(--text-faint)" }}
+          >
+            Reset profile on this device
+          </button>
+        </>
+      )}
+    </section>
+  );
+
+  // ─── Shell ───────────────────────────────────────────────────────
+
+  const showNav = step !== "quiz";
+
+  return (
+    <div className="relative min-h-screen px-3 py-5 md:px-6 md:py-7">
+      {header}
+      <main className="relative z-10">
+        {tab === "home" && (
+          <>
+            {step === "hero" && heroScreen}
+            {step === "onboarding" && onboardingScreen}
+            {step === "map" && mapScreen}
+            {step === "quiz" && quizScreen}
+            {step === "result" && resultScreen}
+          </>
         )}
+        {tab === "badges" && badgesScreen}
+        {tab === "profile" && profileScreen}
       </main>
+      {showNav && bottomNav}
+      <footer className="mx-auto mt-6 max-w-5xl text-center text-xs" style={{ color: "var(--text-faint)" }}>
+        <Link href="/about" className="underline underline-offset-2">
+          About CiviQuest
+        </Link>{" "}
+        · Built with 💙 to raise civic heroes · Data saved only with parent
+        consent
+      </footer>
     </div>
   );
 }
