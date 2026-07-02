@@ -4,18 +4,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CATEGORY_META,
-  CATEGORY_ORDER,
+  LEVEL_SEQUENCE,
+  levelMeta,
   questionsForLevel,
-  type CivicCategory,
+  type LevelKey,
 } from "@/lib/civiquest-questions";
+import { localizeQuestion } from "@/lib/civiquest-questions-hi";
 import {
   buildAnswersMap,
   computeCategoryScores,
   deriveAgeGroup,
-  encouragingMessageForRow,
   padResearchArrays,
 } from "@/lib/research-helpers";
+import { loadLang, saveLang, ui, type Lang } from "@/lib/i18n";
 import type { ConfidenceLabel } from "@/lib/research-types";
 import { saveSubmission } from "@/lib/save-submission";
 import {
@@ -32,6 +33,7 @@ import {
   type StoredProfile,
 } from "@/lib/progress";
 import { Confetti } from "./Confetti";
+import { LanguageToggle } from "./LanguageToggle";
 import { ThemeToggle } from "./ThemeToggle";
 
 type Tab = "home" | "badges" | "profile";
@@ -42,22 +44,11 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const QUESTION_SECONDS = 60;
 const HEARTS_PER_LEVEL = 3;
 
+/** Canonical confidence values — always stored in English. */
 const CONFIDENCE_OPTIONS: ConfidenceLabel[] = [
   "I am sure",
   "Not sure",
   "Just guessed",
-];
-
-const CHEER_CORRECT = [
-  "Splash-tastic! 🎉",
-  "Your street just got prouder!",
-  "Civvy is doing a backflip! 🐬",
-  "That's civic-hero thinking!",
-];
-const CHEER_WRONG = [
-  "Good try! Here's the trick…",
-  "Almost! Civvy learned this the hard way too.",
-  "Every answer teaches us something. 💙",
 ];
 
 const EMPTY_PROFILE: StoredProfile = {
@@ -76,9 +67,11 @@ export function CiviQuestApp() {
   const [hasProfile, setHasProfile] = useState(false);
   const [progress, setProgress] = useState<Progress>(EMPTY_PROGRESS);
   const [hydrated, setHydrated] = useState(false);
+  const [lang, setLang] = useState<Lang>("en");
+  const t = ui(lang);
 
   // Quiz state
-  const [category, setCategory] = useState<CivicCategory | null>(null);
+  const [category, setCategory] = useState<LevelKey | null>(null);
   const [qIndex, setQIndex] = useState(0);
   const [phase, setPhase] = useState<QuizPhase>("answering");
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -94,7 +87,7 @@ export function CiviQuestApp() {
   const [timeTaken, setTimeTaken] = useState(0);
   const [xpEarned, setXpEarned] = useState(0);
   const [newBadges, setNewBadges] = useState<string[]>([]);
-  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState(false);
 
   const questionStartRef = useRef(0);
   const quizStartRef = useRef(0);
@@ -110,14 +103,24 @@ export function CiviQuestApp() {
       setStep("map");
     }
     setProgress(loadProgress());
+    setLang(loadLang());
     setHydrated(true);
   }, []);
+
+  const changeLang = (next: Lang) => {
+    setLang(next);
+    saveLang(next);
+  };
 
   const questions = useMemo(
     () => (category ? questionsForLevel(category, profile.className) : []),
     [category, profile.className],
   );
   const question = questions[qIndex];
+  const localized = question ? localizeQuestion(question, lang) : null;
+
+  const confidenceLabel = (value: ConfidenceLabel): string =>
+    value === "I am sure" ? t.sure : value === "Not sure" ? t.notSure : t.guessed;
 
   const playSound = (isCorrect: boolean) => {
     const ref = isCorrect ? correctAudioRef : wrongAudioRef;
@@ -137,7 +140,7 @@ export function CiviQuestApp() {
 
   // ─── Quiz engine ─────────────────────────────────────────────────
 
-  const startLevel = (cat: CivicCategory) => {
+  const startLevel = (cat: LevelKey) => {
     setCategory(cat);
     setQIndex(0);
     setPhase("answering");
@@ -146,7 +149,7 @@ export function CiviQuestApp() {
     setHearts(HEARTS_PER_LEVEL);
     setTimeLeft(QUESTION_SECONDS);
     setTimedOutIds([]);
-    setSaveNotice(null);
+    setSaveNotice(false);
     timePerQuestionRef.current = [];
     quizStartRef.current = performance.now();
     questionStartRef.current = performance.now();
@@ -189,8 +192,8 @@ export function CiviQuestApp() {
       handleTimeout();
       return;
     }
-    const t = window.setTimeout(() => setTimeLeft((s) => s - 1), 1000);
-    return () => window.clearTimeout(t);
+    const timer = window.setTimeout(() => setTimeLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(timer);
   }, [step, phase, timeLeft, handleTimeout]);
 
   const finishLevel = useCallback(() => {
@@ -204,8 +207,7 @@ export function CiviQuestApp() {
     );
 
     // XP: 10 per correct, +20 finishing, +20 perfect
-    const earned =
-      score * 10 + 20 + (score === questions.length ? 20 : 0);
+    const earned = score * 10 + 20 + (score === questions.length ? 20 : 0);
 
     let next: Progress = {
       ...progress,
@@ -235,13 +237,15 @@ export function CiviQuestApp() {
     setTimeTaken(totalSeconds);
     setXpEarned(earned);
     setStep("result");
-    setSaveNotice(null);
+    setSaveNotice(false);
 
     const { times, confidences: paddedConf } = padResearchArrays(
       questions,
       timePerQuestionRef.current,
       confidences,
     );
+    // Answers and confidences are saved as canonical English text regardless
+    // of the display language, so the research data stays uniform.
     void saveSubmission({
       name: profile.name,
       ageGroup: deriveAgeGroup(profile.age),
@@ -259,9 +263,7 @@ export function CiviQuestApp() {
       quizStatus: timedOutIds.length > 0 ? "Time Up" : "Completed",
     }).then((result) => {
       if (result.ok) {
-        setSaveNotice(
-          "Your answers were saved. Thank you for helping our study! 💙",
-        );
+        setSaveNotice(true);
       }
     });
   }, [
@@ -297,14 +299,14 @@ export function CiviQuestApp() {
 
   const unlockIndex = useMemo(() => {
     let unlocked = 0;
-    for (const cat of CATEGORY_ORDER) {
-      if (progress.levels[cat]) unlocked += 1;
+    for (const key of LEVEL_SEQUENCE) {
+      if (progress.levels[key]) unlocked += 1;
       else break;
     }
     return unlocked; // nodes 0..unlocked are playable
   }, [progress.levels]);
 
-  const starsFor = (cat: CivicCategory): number => {
+  const starsFor = (cat: LevelKey): number => {
     const level = progress.levels[cat];
     if (!level || level.totalQuestions === 0) return 0;
     const pct = level.bestScore / level.totalQuestions;
@@ -312,6 +314,12 @@ export function CiviQuestApp() {
     if (pct >= 0.7) return 2;
     if (pct >= 0.4) return 1;
     return 0;
+  };
+
+  const metaFor = (key: LevelKey) => {
+    const base = levelMeta(key);
+    const localizedMeta = t.meta[key];
+    return { ...base, ...localizedMeta };
   };
 
   const scorePercent =
@@ -334,7 +342,7 @@ export function CiviQuestApp() {
   );
 
   const header = (
-    <header className="mx-auto mb-4 flex w-full max-w-5xl items-center justify-between gap-3 px-1">
+    <header className="mx-auto mb-4 flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 px-1">
       <Link href="/" className="flex items-center gap-2">
         <Image
           src="/cq-logo.png"
@@ -342,7 +350,7 @@ export function CiviQuestApp() {
           width={44}
           height={44}
           priority
-          className="h-11 w-11 object-contain"
+          className="h-10 w-11 object-contain"
         />
         <span
           className="font-[var(--font-montserrat)] text-xl font-black tracking-tight md:text-2xl"
@@ -351,13 +359,12 @@ export function CiviQuestApp() {
           CiviQuest
         </span>
       </Link>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {hydrated && hasProfile && (
           <>
-            {statChip("🔥", String(progress.streak.count), "Day streak")}
-            {statChip("⭐", String(progress.xp), "XP collected")}
-            {step === "quiz" &&
-              statChip("❤️", String(hearts), "Hearts this level")}
+            {statChip("🔥", String(progress.streak.count), t.dayStreak)}
+            {statChip("⭐", String(progress.xp), t.xp)}
+            {step === "quiz" && statChip("❤️", String(hearts), "Hearts")}
           </>
         )}
         <Link
@@ -369,8 +376,9 @@ export function CiviQuestApp() {
             color: "var(--text-strong)",
           }}
         >
-          About
+          {t.about}
         </Link>
+        <LanguageToggle lang={lang} onChange={changeLang} />
         <ThemeToggle />
       </div>
     </header>
@@ -387,9 +395,9 @@ export function CiviQuestApp() {
     >
       {(
         [
-          ["home", "🗺️", "Quest Map"],
-          ["badges", "🏆", "Badges"],
-          ["profile", "👤", "Profile"],
+          ["home", "🗺️", t.questMap],
+          ["badges", "🏆", t.badgesWord],
+          ["profile", "👤", t.profileWord],
         ] as const
       ).map(([id, emoji, label]) => (
         <button
@@ -397,9 +405,7 @@ export function CiviQuestApp() {
           type="button"
           onClick={() => {
             setTab(id);
-            if (id === "home" && (step === "hero" || step === "onboarding")) {
-              // keep current step
-            } else if (id === "home" && hasProfile) {
+            if (id === "home" && hasProfile && step !== "hero" && step !== "onboarding") {
               setStep("map");
             }
           }}
@@ -439,35 +445,36 @@ export function CiviQuestApp() {
                 color: "var(--brand-strong)",
               }}
             >
-              For classes 5–8 · Made in India 🇮🇳
+              {t.heroBadge}
             </p>
             <h1
               className="mb-4 font-[var(--font-montserrat)] text-4xl font-black leading-[1.15] tracking-tight md:text-6xl"
               style={{ color: "var(--text-strong)" }}
             >
-              Civic sense,
+              {t.heroTitle1}
               <br />
-              the fun way.
+              {t.heroTitle2}
             </h1>
             <p className="mb-6 text-base md:text-lg" style={{ color: "var(--text-soft)" }}>
-              Play short real-life levels about clean streets, safe roads, kind
-              behaviour, and saving water — with Civvy the dolphin cheering you
-              on. Earn XP, keep streaks, collect badges.
+              {t.heroText}
             </p>
             <div className="mb-8 flex flex-wrap gap-2">
-              {CATEGORY_ORDER.map((cat) => (
-                <span
-                  key={cat}
-                  className="rounded-full border px-3 py-1.5 text-xs font-bold md:text-sm"
-                  style={{
-                    borderColor: "var(--line)",
-                    backgroundColor: "var(--card-soft)",
-                    color: "var(--text-strong)",
-                  }}
-                >
-                  {CATEGORY_META[cat].emoji} {CATEGORY_META[cat].title}
-                </span>
-              ))}
+              {LEVEL_SEQUENCE.map((key) => {
+                const meta = metaFor(key);
+                return (
+                  <span
+                    key={key}
+                    className="rounded-full border px-3 py-1.5 text-xs font-bold md:text-sm"
+                    style={{
+                      borderColor: key === "final" ? "var(--gold)" : "var(--line)",
+                      backgroundColor: "var(--card-soft)",
+                      color: "var(--text-strong)",
+                    }}
+                  >
+                    {meta.emoji} {meta.title}
+                  </span>
+                );
+              })}
             </div>
             <button
               type="button"
@@ -479,7 +486,7 @@ export function CiviQuestApp() {
                 boxShadow: "var(--shadow-pop)",
               }}
             >
-              Start your quest →
+              {t.heroCta}
             </button>
           </div>
           <div className="relative flex items-center justify-center">
@@ -488,14 +495,14 @@ export function CiviQuestApp() {
               style={{ backgroundColor: "var(--card-softer)" }}
             />
             <p
-              className="cq-pop-in absolute -top-1 left-1/2 z-10 -translate-x-1/2 rounded-2xl px-4 py-2 text-sm font-bold shadow-lg md:text-base"
+              className="cq-pop-in absolute -top-1 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-2xl px-4 py-2 text-sm font-bold shadow-lg md:text-base"
               style={{
                 backgroundColor: "var(--card)",
                 color: "var(--text-strong)",
                 boxShadow: "var(--shadow-pop)",
               }}
             >
-              Hello, I&apos;m Civvy 👋
+              {t.civvyHello}
             </p>
             <Image
               src="/Civvy-v2.png"
@@ -510,11 +517,13 @@ export function CiviQuestApp() {
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
-        {[
-          ["🎮", "Play", "10 quick real-life situations per level, 60 seconds each."],
-          ["🧠", "Think", "No exam marks — choose what you would really do."],
-          ["🌟", "Grow", "XP, streaks, and badges turn habits into adventures."],
-        ].map(([emoji, title, text]) => (
+        {(
+          [
+            ["🎮", t.cardPlay, t.cardPlayText],
+            ["🧠", t.cardThink, t.cardThinkText],
+            ["🌟", t.cardGrow, t.cardGrowText],
+          ] as const
+        ).map(([emoji, title, text]) => (
           <div
             key={title}
             className="rounded-3xl border p-5 text-left transition hover:-translate-y-1"
@@ -537,6 +546,12 @@ export function CiviQuestApp() {
     </section>
   );
 
+  const inputStyle = {
+    borderColor: "var(--line)",
+    backgroundColor: "var(--card-soft)",
+    color: "var(--text)",
+  } as const;
+
   const onboardingScreen = (
     <section
       className="cq-slide-up mx-auto w-full max-w-3xl rounded-[34px] border p-6 text-left md:p-8"
@@ -550,79 +565,64 @@ export function CiviQuestApp() {
         className="mb-1 font-[var(--font-montserrat)] text-2xl font-black md:text-3xl"
         style={{ color: "var(--text-strong)" }}
       >
-        Tell Civvy about you 🐬
+        {t.obTitle}
       </h2>
       <p className="mb-5 text-sm" style={{ color: "var(--text-soft)" }}>
-        This helps us pick the right questions for your class.
+        {t.obSubtitle}
       </p>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold">Name</span>
+          <span className="mb-1 block text-sm font-semibold">{t.name}</span>
           <input
             type="text"
             value={profile.name}
             onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-            placeholder="Enter your name"
+            placeholder={t.namePh}
             className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-            style={{
-              borderColor: "var(--line)",
-              backgroundColor: "var(--card-soft)",
-              color: "var(--text)",
-            }}
+            style={inputStyle}
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold">Age</span>
+          <span className="mb-1 block text-sm font-semibold">{t.age}</span>
           <input
             type="number"
             min="9"
             max="15"
             value={profile.age}
             onChange={(e) => setProfile({ ...profile, age: e.target.value })}
-            placeholder="10 to 14"
+            placeholder={t.agePh}
             className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-            style={{
-              borderColor: "var(--line)",
-              backgroundColor: "var(--card-soft)",
-              color: "var(--text)",
-            }}
+            style={inputStyle}
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold">School</span>
+          <span className="mb-1 block text-sm font-semibold">{t.school}</span>
           <input
             type="text"
             value={profile.school}
             onChange={(e) => setProfile({ ...profile, school: e.target.value })}
-            placeholder="Enter school name"
+            placeholder={t.schoolPh}
             className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-            style={{
-              borderColor: "var(--line)",
-              backgroundColor: "var(--card-soft)",
-              color: "var(--text)",
-            }}
+            style={inputStyle}
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold">Class</span>
+          <span className="mb-1 block text-sm font-semibold">{t.className}</span>
           <select
             value={profile.className}
             onChange={(e) =>
               setProfile({ ...profile, className: e.target.value })
             }
             className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-            style={{
-              borderColor: "var(--line)",
-              backgroundColor: "var(--card-soft)",
-              color: "var(--text)",
-            }}
+            style={inputStyle}
           >
-            <option value="">Select class</option>
-            <option value="5">Class 5</option>
-            <option value="6">Class 6</option>
-            <option value="7">Class 7</option>
-            <option value="8">Class 8</option>
+            <option value="">{t.selectClass}</option>
+            {["5", "6", "7", "8"].map((c) => (
+              <option key={c} value={c}>
+                {t.classWord} {c}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -632,18 +632,13 @@ export function CiviQuestApp() {
         style={{ borderColor: "var(--line)", backgroundColor: "var(--card-soft)" }}
       >
         <p className="mb-1 text-sm font-bold" style={{ color: "var(--text-strong)" }}>
-          Parent or guardian permission
+          {t.parentTitle}
         </p>
         <p className="mb-3 text-xs" style={{ color: "var(--text-faint)" }}>
-          We only save quiz answers for our civic-education research with a
-          parent or guardian&apos;s okay. The email is just for consent and
-          won&apos;t be shared or used for marketing — you can ask us to delete
-          it anytime.
+          {t.parentNote}
         </p>
         <label className="block">
-          <span className="mb-1 block text-sm font-semibold">
-            Parent/guardian email
-          </span>
+          <span className="mb-1 block text-sm font-semibold">{t.parentEmail}</span>
           <input
             type="email"
             value={profile.parentEmail}
@@ -652,11 +647,7 @@ export function CiviQuestApp() {
             }
             placeholder="parent@example.com"
             className="min-h-[48px] w-full rounded-xl border px-4 py-3 text-base outline-none"
-            style={{
-              borderColor: "var(--line)",
-              backgroundColor: "var(--card)",
-              color: "var(--text)",
-            }}
+            style={{ ...inputStyle, backgroundColor: "var(--card)" }}
           />
         </label>
         <label className="mt-3 flex items-start gap-2 text-sm">
@@ -668,10 +659,7 @@ export function CiviQuestApp() {
             }
             className="mt-1 h-5 w-5 shrink-0"
           />
-          <span style={{ color: "var(--text-strong)" }}>
-            I am a parent/guardian and I agree to let CiviQuest save my
-            child&apos;s quiz answers for this research study.
-          </span>
+          <span style={{ color: "var(--text-strong)" }}>{t.consent}</span>
         </label>
       </div>
 
@@ -686,7 +674,7 @@ export function CiviQuestApp() {
         className="mt-5 min-h-[52px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
       >
-        Open the Quest Map →
+        {t.openMap}
       </button>
     </section>
   );
@@ -709,18 +697,28 @@ export function CiviQuestApp() {
           priority
           className="cq-float h-16 w-16 object-contain md:h-20 md:w-20"
         />
-        <div className="text-left">
+        <div className="min-w-0 flex-1 text-left">
           <p className="text-lg font-black md:text-xl" style={{ color: "var(--text-strong)" }}>
-            Hi {profile.name.split(" ")[0] || "explorer"}! 🌊
+            {t.hi} {profile.name.split(" ")[0] || "explorer"}! 🌊
           </p>
           <p className="text-sm" style={{ color: "var(--text-soft)" }}>
             {unlockIndex === 0
-              ? "Your quest starts with Clean Streets. Ready?"
-              : unlockIndex >= CATEGORY_ORDER.length
-                ? "All levels explored! Replay any level to beat your stars."
-                : `Next stop: ${CATEGORY_META[CATEGORY_ORDER[unlockIndex]].title}!`}
+              ? t.mapStart
+              : unlockIndex >= LEVEL_SEQUENCE.length
+                ? t.mapAllDone
+                : `${t.nextStop} ${metaFor(LEVEL_SEQUENCE[unlockIndex]).title}!`}
           </p>
         </div>
+        <span
+          className="shrink-0 rounded-full border px-3 py-1.5 text-xs font-black md:text-sm"
+          style={{
+            borderColor: "var(--line)",
+            backgroundColor: "var(--card-soft)",
+            color: "var(--brand-strong)",
+          }}
+        >
+          {t.classWord} {profile.className} · {t.levels5}
+        </span>
       </div>
 
       <div className="relative">
@@ -744,12 +742,17 @@ export function CiviQuestApp() {
         </svg>
 
         <ol className="relative space-y-5">
-          {CATEGORY_ORDER.map((cat, index) => {
-            const meta = CATEGORY_META[cat];
+          {LEVEL_SEQUENCE.map((cat, index) => {
+            const meta = metaFor(cat);
+            const isBoss = cat === "final";
             const unlocked = index <= unlockIndex;
             const played = Boolean(progress.levels[cat]);
             const stars = starsFor(cat);
-            const side = index % 2 === 0 ? "md:mr-auto" : "md:ml-auto";
+            const side = isBoss
+              ? "md:mx-auto"
+              : index % 2 === 0
+                ? "md:mr-auto"
+                : "md:ml-auto";
             return (
               <li key={cat} className={`relative md:w-[calc(50%+56px)] ${side}`}>
                 <button
@@ -758,7 +761,8 @@ export function CiviQuestApp() {
                   onClick={() => startLevel(cat)}
                   className="group flex w-full items-center gap-4 rounded-3xl border p-4 text-left transition enabled:hover:-translate-y-1 enabled:hover:shadow-lg disabled:opacity-55 md:p-5"
                   style={{
-                    borderColor: "var(--line)",
+                    borderColor: isBoss && unlocked ? "var(--gold)" : "var(--line)",
+                    borderWidth: isBoss ? 2 : 1,
                     backgroundColor: "var(--card)",
                     boxShadow: "var(--shadow-pop)",
                   }}
@@ -776,9 +780,9 @@ export function CiviQuestApp() {
                   <span className="min-w-0 flex-1">
                     <span
                       className="block text-xs font-bold uppercase tracking-wider"
-                      style={{ color: "var(--brand-strong)" }}
+                      style={{ color: isBoss ? "var(--gold)" : "var(--brand-strong)" }}
                     >
-                      Level {index + 1}
+                      {isBoss ? t.bossTag : `${t.level} ${index + 1}`}
                     </span>
                     <span
                       className="block truncate text-lg font-black md:text-xl"
@@ -789,7 +793,7 @@ export function CiviQuestApp() {
                     <span className="block text-xs md:text-sm" style={{ color: "var(--text-soft)" }}>
                       {meta.subtitle}
                     </span>
-                    <span className="mt-1 block text-sm tracking-widest" aria-label={`${stars} of 3 stars`}>
+                    <span className="mt-1 block text-sm tracking-widest" aria-label={`${stars}/3`}>
                       {"★".repeat(stars)}
                       <span style={{ color: "var(--text-faint)", opacity: 0.4 }}>
                         {"★".repeat(3 - stars)}
@@ -800,11 +804,14 @@ export function CiviQuestApp() {
                     className="shrink-0 rounded-full px-4 py-2 text-sm font-bold"
                     style={
                       unlocked
-                        ? { backgroundColor: "var(--brand)", color: "var(--on-brand)" }
+                        ? {
+                            backgroundColor: isBoss ? "var(--gold)" : "var(--brand)",
+                            color: isBoss ? "#4a3800" : "var(--on-brand)",
+                          }
                         : { backgroundColor: "var(--card-softer)", color: "var(--text-faint)" }
                     }
                   >
-                    {played ? "Replay" : unlocked ? "Start" : "Locked"}
+                    {played ? t.replay : unlocked ? (isBoss ? t.battle : t.start) : t.locked}
                   </span>
                 </button>
               </li>
@@ -814,13 +821,12 @@ export function CiviQuestApp() {
       </div>
 
       <p className="mt-5 text-center text-xs md:text-sm" style={{ color: "var(--text-faint)" }}>
-        Finish a level to unlock the next — 10 missions each, 60 seconds per
-        mission.
+        {t.mapFooter}
       </p>
     </section>
   );
 
-  const quizScreen = question && category && (
+  const quizScreen = question && localized && category && (
     <section
       className="cq-slide-up mx-auto w-full max-w-5xl rounded-[34px] border p-5 md:p-8"
       style={{
@@ -832,8 +838,8 @@ export function CiviQuestApp() {
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="min-w-0 text-left">
           <p className="truncate text-xs font-bold uppercase tracking-wider" style={{ color: "var(--brand-strong)" }}>
-            {CATEGORY_META[category].emoji} {CATEGORY_META[category].title} ·
-            Mission {qIndex + 1} of {questions.length}
+            {metaFor(category).emoji} {metaFor(category).title} · {t.mission}{" "}
+            {qIndex + 1} {t.of} {questions.length}
           </p>
           <div
             className="mt-2 h-2.5 w-40 overflow-hidden rounded-full md:w-64"
@@ -874,7 +880,7 @@ export function CiviQuestApp() {
                     ? "#5b4300"
                     : "var(--on-brand)",
           }}
-          aria-label={`${timeLeft} seconds left`}
+          aria-label={`${timeLeft} ${t.secondsLeft}`}
         >
           ⏱ {phase === "revealed" ? "—" : `${timeLeft}s`}
         </span>
@@ -885,12 +891,12 @@ export function CiviQuestApp() {
           className="mb-6 text-left text-xl font-black leading-[1.4] md:mb-0 md:text-2xl lg:text-3xl"
           style={{ color: "var(--text-strong)" }}
         >
-          {question.question}
+          {localized.question}
         </h2>
 
         <div>
           <div className="space-y-3">
-            {question.options.map((option, idx) => {
+            {localized.options.map((option, idx) => {
               const picked = answers[question.id] === idx;
               const revealed = phase === "revealed";
               const isCorrectOption = idx === question.correct;
@@ -912,18 +918,30 @@ export function CiviQuestApp() {
               }
               return (
                 <button
-                  key={option}
+                  key={`${question.id}-${idx}`}
                   type="button"
                   disabled={revealed}
                   onClick={() =>
                     setAnswers((prev) => ({ ...prev, [question.id]: idx }))
                   }
-                  className="w-full rounded-xl border-2 px-5 py-4 text-left text-base font-bold transition-all duration-200 enabled:hover:-translate-y-0.5 enabled:active:scale-[0.98] md:text-lg"
+                  className="flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3.5 text-left text-base font-bold transition-all duration-200 enabled:hover:-translate-y-0.5 enabled:active:scale-[0.98] md:text-lg"
                   style={{ backgroundColor: bg, borderColor: border, color }}
                 >
-                  {revealed && isCorrectOption ? "✅ " : ""}
-                  {revealed && picked && !isCorrectOption ? "❌ " : ""}
-                  {option}
+                  <span
+                    aria-hidden
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-sm font-black"
+                    style={{
+                      borderColor: "color-mix(in srgb, currentColor 25%, transparent)",
+                      opacity: 0.85,
+                    }}
+                  >
+                    {revealed && isCorrectOption
+                      ? "✓"
+                      : revealed && picked && !isCorrectOption
+                        ? "✗"
+                        : String.fromCharCode(65 + idx)}
+                  </span>
+                  <span>{option}</span>
                 </button>
               );
             })}
@@ -932,7 +950,7 @@ export function CiviQuestApp() {
           {phase === "answering" && typeof answers[question.id] === "number" && (
             <div className="cq-slide-up mt-6 text-left">
               <p className="mb-2 text-sm font-bold md:text-base" style={{ color: "var(--text-strong)" }}>
-                How sure are you?
+                {t.howSure}
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">
                 {CONFIDENCE_OPTIONS.map((option) => {
@@ -962,7 +980,7 @@ export function CiviQuestApp() {
                             }
                       }
                     >
-                      {option}
+                      {confidenceLabel(option)}
                     </button>
                   );
                 })}
@@ -981,7 +999,7 @@ export function CiviQuestApp() {
               className="mt-6 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
             >
-              Check ✓
+              {t.check}
             </button>
           ) : (
             <div className="cq-pop-in mt-6 text-left">
@@ -1006,10 +1024,10 @@ export function CiviQuestApp() {
               >
                 <p className="mb-1 font-black" style={{ color: "var(--text-strong)" }}>
                   {timedOutIds.includes(question.id)
-                    ? "⏰ Time's up for this one!"
+                    ? t.timeUpQ
                     : answers[question.id] === question.correct
-                      ? CHEER_CORRECT[question.id % CHEER_CORRECT.length]
-                      : CHEER_WRONG[question.id % CHEER_WRONG.length]}
+                      ? t.cheersCorrect[question.id % t.cheersCorrect.length]
+                      : t.cheersWrong[question.id % t.cheersWrong.length]}
                   {answers[question.id] === question.correct &&
                     !timedOutIds.includes(question.id) && (
                       <span className="cq-xp-rise ml-2 inline-block font-black" style={{ color: "var(--gold)" }}>
@@ -1018,7 +1036,7 @@ export function CiviQuestApp() {
                     )}
                 </p>
                 <p className="text-sm" style={{ color: "var(--text-soft)" }}>
-                  {question.feedback}
+                  {localized.feedback}
                 </p>
               </div>
               <button
@@ -1028,7 +1046,7 @@ export function CiviQuestApp() {
                 className="mt-4 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition hover:scale-[1.02] active:scale-[0.98]"
                 style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
               >
-                {qIndex === questions.length - 1 ? "See results 🏁" : "Continue →"}
+                {qIndex === questions.length - 1 ? t.seeResults : t.continue}
               </button>
             </div>
           )}
@@ -1058,18 +1076,20 @@ export function CiviQuestApp() {
         className="mb-2 font-[var(--font-montserrat)] text-3xl font-black md:text-4xl"
         style={{ color: "var(--text-strong)" }}
       >
-        {scorePercent >= 0.8
-          ? "Civic Champion! 🏆"
-          : scorePercent >= 0.5
-            ? "Rising Civic Star 🌟"
-            : "Quest complete — thanks for sharing! 💙"}
+        {category === "final" && scorePercent >= 0.8
+          ? t.crownHeadline
+          : scorePercent >= 0.8
+            ? t.champion
+            : scorePercent >= 0.5
+              ? t.risingStar
+              : t.questComplete}
       </h2>
       <p className="mb-1 text-lg font-bold" style={{ color: "var(--text-strong)" }}>
-        {finalScore} of {questions.length} community-friendly picks ·{" "}
+        {finalScore}/{questions.length} {t.picksOf} ·{" "}
         {"★".repeat(starsFor(category))}
       </p>
       <p className="mb-4 text-sm" style={{ color: "var(--text-soft)" }}>
-        Time: {timeTaken}s · XP earned:{" "}
+        {t.time}: {timeTaken}s · {t.xpEarned}:{" "}
         <span className="font-black" style={{ color: "var(--gold)" }}>
           +{xpEarned}
         </span>
@@ -1078,8 +1098,9 @@ export function CiviQuestApp() {
       {newBadges.length > 0 && (
         <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
           {newBadges.map((id) => {
+            const def = t.badgeDefs[id as keyof typeof t.badgeDefs];
             const badge = BADGES.find((b) => b.id === id);
-            if (!badge) return null;
+            if (!badge || !def) return null;
             return (
               <span
                 key={id}
@@ -1090,8 +1111,8 @@ export function CiviQuestApp() {
                   color: "var(--text-strong)",
                 }}
               >
-                <span className="text-xl">{badge.emoji}</span> New badge:{" "}
-                {badge.title}
+                <span className="text-xl">{badge.emoji}</span> {t.newBadge}{" "}
+                {def.title}
               </span>
             );
           })}
@@ -1100,18 +1121,20 @@ export function CiviQuestApp() {
 
       {saveNotice && (
         <p className="mb-4 text-sm font-semibold" style={{ color: "var(--correct-text)" }}>
-          {saveNotice}
+          {t.saved}
         </p>
       )}
 
       <div className="max-h-64 space-y-2 overflow-auto pr-1 text-left">
         {questions.map((q, index) => {
+          const loc = localizeQuestion(q, lang);
           const selectedIndex = answers[q.id];
           const selected =
             typeof selectedIndex === "number"
-              ? q.options[selectedIndex]
-              : "Not answered";
+              ? loc.options[selectedIndex]
+              : t.notAnswered;
           const isCorrect = selectedIndex === q.correct;
+          const rowMessages = isCorrect ? t.rowPositive : t.rowGentle;
           return (
             <div
               key={q.id}
@@ -1122,16 +1145,16 @@ export function CiviQuestApp() {
               }}
             >
               <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                {index + 1}. {q.question}
+                {index + 1}. {loc.question}
               </p>
               <p className="text-sm" style={{ color: "var(--text-soft)" }}>
-                Your answer: {selected}
+                {t.yourAnswer} {selected}
               </p>
               <p className="mt-1 text-sm" style={{ color: "var(--text-soft)" }}>
-                {encouragingMessageForRow(isCorrect, q.id)}{" "}
+                {rowMessages[q.id % rowMessages.length]}{" "}
                 {isCorrect
-                  ? q.feedback
-                  : `A choice that often works: ${q.options[q.correct]}`}
+                  ? loc.feedback
+                  : `${t.betterChoice} ${loc.options[q.correct]}`}
               </p>
             </div>
           );
@@ -1144,7 +1167,7 @@ export function CiviQuestApp() {
         className="mt-5 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition hover:scale-[1.02] active:scale-[0.98]"
         style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
       >
-        Back to Quest Map 🗺️
+        {t.backToMap}
       </button>
     </section>
   );
@@ -1155,10 +1178,11 @@ export function CiviQuestApp() {
         className="mb-4 text-left font-[var(--font-montserrat)] text-2xl font-black md:text-3xl"
         style={{ color: "var(--text-strong)" }}
       >
-        Badge Reef 🏆
+        {t.badgeReef}
       </h2>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         {BADGES.map((badge) => {
+          const def = t.badgeDefs[badge.id as keyof typeof t.badgeDefs];
           const earned = progress.badges.includes(badge.id);
           return (
             <div
@@ -1174,10 +1198,10 @@ export function CiviQuestApp() {
             >
               <p className="mb-2 text-4xl">{earned ? badge.emoji : "❔"}</p>
               <p className="font-black" style={{ color: "var(--text-strong)" }}>
-                {badge.title}
+                {def?.title ?? badge.title}
               </p>
               <p className="mt-1 text-xs" style={{ color: "var(--text-soft)" }}>
-                {badge.hint}
+                {def?.hint ?? badge.hint}
               </p>
             </div>
           );
@@ -1185,7 +1209,7 @@ export function CiviQuestApp() {
       </div>
       {progress.badges.length === 0 && (
         <p className="mt-5 text-center text-sm" style={{ color: "var(--text-faint)" }}>
-          Play your first level to start collecting badges!
+          {t.badgesEmpty}
         </p>
       )}
     </section>
@@ -1204,7 +1228,7 @@ export function CiviQuestApp() {
         >
           <p className="mb-4 text-5xl">🐬</p>
           <p className="mb-4 font-bold" style={{ color: "var(--text-strong)" }}>
-            No explorer profile yet — start your quest to create one!
+            {t.noProfile}
           </p>
           <button
             type="button"
@@ -1215,7 +1239,7 @@ export function CiviQuestApp() {
             className="rounded-2xl px-6 py-3 font-bold"
             style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
           >
-            Start now →
+            {t.startNow}
           </button>
         </div>
       ) : (
@@ -1239,22 +1263,24 @@ export function CiviQuestApp() {
                 {profile.name}
               </p>
               <p className="text-sm" style={{ color: "var(--text-soft)" }}>
-                Class {profile.className} · {profile.school}
+                {t.classWord} {profile.className} · {profile.school}
               </p>
             </div>
           </div>
 
           <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-            {[
-              ["⭐", String(progress.xp), "XP"],
-              ["🔥", String(progress.streak.count), "Day streak"],
-              ["🏆", String(progress.badges.length), "Badges"],
+            {(
               [
-                "🗺️",
-                `${Object.keys(progress.levels).length}/${CATEGORY_ORDER.length}`,
-                "Levels",
-              ],
-            ].map(([emoji, value, label]) => (
+                ["⭐", String(progress.xp), t.xp],
+                ["🔥", String(progress.streak.count), t.dayStreak],
+                ["🏆", String(progress.badges.length), t.badgesWord],
+                [
+                  "🗺️",
+                  `${Object.keys(progress.levels).length}/${LEVEL_SEQUENCE.length}`,
+                  t.levelsWord,
+                ],
+              ] as const
+            ).map(([emoji, value, label]) => (
               <div
                 key={label}
                 className="rounded-2xl border p-4 text-center"
@@ -1279,11 +1305,11 @@ export function CiviQuestApp() {
             style={{ borderColor: "var(--line)", backgroundColor: "var(--card)" }}
           >
             <p className="mb-3 font-black" style={{ color: "var(--text-strong)" }}>
-              Level bests
+              {t.levelBests}
             </p>
             <div className="space-y-3">
-              {CATEGORY_ORDER.map((cat) => {
-                const meta = CATEGORY_META[cat];
+              {LEVEL_SEQUENCE.map((cat) => {
+                const meta = metaFor(cat);
                 const level = progress.levels[cat];
                 const pct = level
                   ? Math.round((level.bestScore / level.totalQuestions) * 100)
@@ -1297,7 +1323,7 @@ export function CiviQuestApp() {
                       <span style={{ color: "var(--text-soft)" }}>
                         {level
                           ? `${level.bestScore}/${level.totalQuestions}`
-                          : "Not played"}
+                          : t.notPlayed}
                       </span>
                     </div>
                     <div
@@ -1329,25 +1355,21 @@ export function CiviQuestApp() {
                 color: "var(--text-strong)",
               }}
             >
-              ✏️ Edit details
+              {t.editDetails}
             </button>
             <Link
               href="/teacher"
               className="flex-1 rounded-2xl px-5 py-3 text-center font-bold transition hover:scale-[1.02]"
               style={{ backgroundColor: "var(--brand-strong)", color: "var(--on-brand)" }}
             >
-              🧑‍🏫 Teacher? Open class dashboard
+              {t.teacherLink}
             </Link>
           </div>
 
           <button
             type="button"
             onClick={() => {
-              if (
-                window.confirm(
-                  "Reset this device's profile and progress? Saved research answers stay in the study database (parents can email us to remove them).",
-                )
-              ) {
+              if (window.confirm(t.resetConfirm)) {
                 clearProfile();
                 setProfile(EMPTY_PROFILE);
                 setHasProfile(false);
@@ -1359,7 +1381,7 @@ export function CiviQuestApp() {
             className="mt-3 w-full rounded-2xl px-5 py-3 text-sm font-semibold transition hover:scale-[1.01]"
             style={{ color: "var(--text-faint)" }}
           >
-            Reset profile on this device
+            {t.reset}
           </button>
         </>
       )}
@@ -1389,10 +1411,9 @@ export function CiviQuestApp() {
       {showNav && bottomNav}
       <footer className="mx-auto mt-6 max-w-5xl text-center text-xs" style={{ color: "var(--text-faint)" }}>
         <Link href="/about" className="underline underline-offset-2">
-          About CiviQuest
+          {t.aboutCiviquest}
         </Link>{" "}
-        · Built with 💙 to raise civic heroes · Data saved only with parent
-        consent
+        {t.footerTagline}
       </footer>
     </div>
   );

@@ -15,7 +15,12 @@ export type CiviQuestion = {
   category: CivicCategory;
   /** School classes this question is shown to. */
   grades: number[];
+  /** Boss questions appear only in the final mixed level. */
+  boss?: boolean;
 };
+
+/** Level keys: the four category quests plus the mixed final challenge. */
+export type LevelKey = CivicCategory | "final";
 
 export const CATEGORY_META: Record<
   CivicCategory,
@@ -54,18 +59,39 @@ export const CATEGORY_ORDER: CivicCategory[] = [
   "environment",
 ];
 
+export const FINAL_META = {
+  title: "Civic Hero Finale",
+  subtitle: "The boss level — every quest, one challenge.",
+  emoji: "👑",
+  color: "#e8a400",
+};
+
+/** The five levels every class plays, in unlock order. */
+export const LEVEL_SEQUENCE: LevelKey[] = [...CATEGORY_ORDER, "final"];
+
+export function levelMeta(key: LevelKey) {
+  return key === "final" ? FINAL_META : CATEGORY_META[key];
+}
+
 export function gradeBandForClass(className: string): GradeBand {
   return className === "7" || className === "8" ? "7-8" : "5-6";
 }
 
+function targetGrade(className: string): number {
+  const grade = Number.parseInt(className, 10);
+  return Number.isNaN(grade) ? 6 : Math.min(8, Math.max(5, grade));
+}
+
 export function questionsForLevel(
-  category: CivicCategory,
+  level: LevelKey,
   className: string,
 ): CiviQuestion[] {
-  const grade = Number.parseInt(className, 10);
-  const target = Number.isNaN(grade) ? 6 : Math.min(8, Math.max(5, grade));
+  const target = targetGrade(className);
+  if (level === "final") {
+    return QUESTIONS.filter((q) => q.boss && q.grades.includes(target));
+  }
   return QUESTIONS.filter(
-    (q) => q.category === category && q.grades.includes(target),
+    (q) => !q.boss && q.category === level && q.grades.includes(target),
   );
 }
 
@@ -962,5 +988,346 @@ export const QUESTIONS: CiviQuestion[] = [
     correct: 1,
     feedback:
       "One battery can pollute thousands of litres of groundwater. Tiny thing, huge footprint.",
+  },
+
+  // ─── Boss level: Civic Hero Finale (👑, mixed categories) ────────
+  {
+    id: 501,
+    category: "cleanliness",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "BOSS ROUND! You are at a mela (fair) with your family. Your ice-cream stick, your sister's wrapper, and your father's paper cup — all need to go somewhere, but the bin nearby is overflowing. What is the hero move?",
+    options: [
+      "Balance them on top of the overflowing bin",
+      "Carry them in a spare bag until you find an emptier bin",
+      "Leave them on a food stall's counter",
+      "Drop them where others have dropped theirs",
+    ],
+    correct: 1,
+    feedback:
+      "An overflowing bin is not permission to litter — heroes carry on to the next one.",
+  },
+  {
+    id: 502,
+    category: "traffic",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "Your school bus stops and you must cross the road to reach home. Where do you cross from?",
+    options: [
+      "Right in front of the bus, quickly",
+      "Behind the bus, squeezing between cars",
+      "Wait for the bus to leave so drivers can see you, then cross where visibility is clear",
+      "Anywhere — buses protect you",
+    ],
+    correct: 2,
+    feedback:
+      "Drivers cannot see a child hidden by a bus. Waiting for it to leave makes YOU visible.",
+  },
+  {
+    id: 503,
+    category: "public_behavior",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "In the hospital waiting area, your little cousin wants to play a phone game with the volume up. What does a civic hero suggest?",
+    options: [
+      "Play it loud — games are boring on mute",
+      "Volume off or earphones; sick people need calm",
+      "Play in short loud bursts",
+      "Ask the nurse to allow it",
+    ],
+    correct: 1,
+    feedback: "Quiet in hospitals is a gift to people having their hardest day.",
+  },
+  {
+    id: 504,
+    category: "environment",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "It rained heavily and water is gushing off your roof to the drain. Your grandmother says, \"In my village we caught this water.\" What is she talking about?",
+    options: [
+      "Catching fish in the rain",
+      "Rainwater harvesting — storing rain to use and to refill the ground",
+      "Blocking drains for fun",
+      "A festival tradition",
+    ],
+    correct: 1,
+    feedback:
+      "Rainwater harvesting turns a rainy day into months of stored water. Grandma knows!",
+  },
+  {
+    id: 505,
+    category: "cleanliness",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "Your class is having a party and you are in charge of clean-up planning. What is the smartest FIRST step?",
+    options: [
+      "Decide who to blame if it gets messy",
+      "Keep two labelled bins ready — wet and dry — before the party starts",
+      "Plan to clean everything next morning",
+      "Ask the sweeper to stay late",
+    ],
+    correct: 1,
+    feedback:
+      "Heroes prevent mess before it happens. Two ready bins beat one big clean-up.",
+  },
+  {
+    id: 506,
+    category: "traffic",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "You and your friends reach a railway crossing and the barrier is coming down. One friend says you can all duck under quickly. What do you do?",
+    options: [
+      "Follow him — trains take ages",
+      "Stop everyone; barriers mean a train is close, and you wait, always",
+      "Let him go and watch",
+      "Race him to the other side",
+    ],
+    correct: 1,
+    feedback:
+      "No shortcut in the world is worth a railway crossing. Heroes stop their friends too.",
+  },
+  {
+    id: 507,
+    category: "public_behavior",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "A new student who speaks a different language at home sits alone at lunch every day. Boss-level kindness looks like…",
+    options: [
+      "Leaving them alone forever — they must like it",
+      "Sitting with them and sharing lunch, even if you talk with hands and smiles",
+      "Telling others to be nice from a distance",
+      "Asking the teacher to force them to talk",
+    ],
+    correct: 1,
+    feedback:
+      "Friendship needs no perfect common language. One shared lunch changes a school year.",
+  },
+  {
+    id: 508,
+    category: "environment",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "Your society garden tap fills a tank in 10 minutes but the gardener walks away for 30. Water overflows daily. What can YOU actually do?",
+    options: [
+      "Nothing — you are just a kid",
+      "Politely tell the gardener or secretary, and offer the idea of a timer or a whistle reminder",
+      "Turn off taps randomly all day",
+      "Shout at the gardener",
+    ],
+    correct: 1,
+    feedback:
+      "Kids who speak up politely fix leaks adults stopped noticing. That is real power.",
+  },
+  {
+    id: 509,
+    category: "cleanliness",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "FINAL CHALLENGE: A tourist family drops a bottle near India Gate and walks on. Your little brother says, \"See, even grown-ups litter!\" What is the BEST reply?",
+    options: [
+      "\"Yes, so we can too.\"",
+      "\"Some people forget — but we are the kind who don't. Pick it up with me?\"",
+      "\"Let's shout at them!\"",
+      "\"Only tourists litter.\"",
+    ],
+    correct: 1,
+    feedback:
+      "Little brothers copy YOU, not strangers. That answer just trained a future civic hero.",
+  },
+  {
+    id: 510,
+    category: "traffic",
+    grades: JUNIOR,
+    boss: true,
+    question:
+      "You are cycling home and it starts getting dark. Your cycle has no light. What is the safest plan?",
+    options: [
+      "Ride fast in the middle of the road to finish quickly",
+      "Ride slowly on the edge, walk at dark crossings, and ask for a light or reflector at home",
+      "Close one eye to see better",
+      "Ride on the footpath at full speed",
+    ],
+    correct: 1,
+    feedback:
+      "Being SEEN is a cyclist's superpower — reflectors and lights are hero gear.",
+  },
+  {
+    id: 511,
+    category: "cleanliness",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "BOSS ROUND! Your school's annual fest expects 2,000 visitors. You lead the cleanliness team. Which plan actually works at that scale?",
+    options: [
+      "One announcement asking people not to litter",
+      "Mapped bin stations at food zones and exits, volunteers on shifts, and a waste-sorting point",
+      "A big fine printed on tickets",
+      "Cleaning everything after the fest ends",
+    ],
+    correct: 1,
+    feedback:
+      "At scale, systems beat slogans: put bins where waste is born and people will use them.",
+  },
+  {
+    id: 512,
+    category: "traffic",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "Your friend's older brother drives you both home, checking Instagram at signals. Your friend stays silent. The boss-level move?",
+    options: [
+      "Stay silent too — it is his brother",
+      "Say calmly, \"Bhaiya, I get scared when the phone's out — can it wait till home?\"",
+      "Grab the phone and hide it",
+      "Post about him online later",
+    ],
+    correct: 1,
+    feedback:
+      "Naming your own fear — not blaming — is the sentence that actually changes drivers.",
+  },
+  {
+    id: 513,
+    category: "public_behavior",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "During a cricket match in your lane, the ball breaks an elderly neighbour's window. Everyone scatters. You are team captain. What now?",
+    options: [
+      "Scatter too — no proof, no problem",
+      "Knock on the door, apologise, and offer to pay from the team's pocket money",
+      "Send the youngest player to apologise alone",
+      "Stop playing cricket forever",
+    ],
+    correct: 1,
+    feedback:
+      "Owning mistakes is the captain's job. That apology buys a lifetime of trust in your lane.",
+  },
+  {
+    id: 514,
+    category: "environment",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "Your city announces odd-even vehicle days to fight smog. Your father grumbles it is a headache. What is the strongest point FOR trying it honestly?",
+    options: [
+      "Rules are rules, no thinking needed",
+      "Halving cars for some days cuts exhaust now, and pushes carpools and transit habits that outlast the rule",
+      "It is fun to remember number plates",
+      "There is no good argument for it",
+    ],
+    correct: 1,
+    feedback:
+      "Temporary rules that build permanent habits are how cities actually change their air.",
+  },
+  {
+    id: 515,
+    category: "cleanliness",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "A civic survey ranks your city low on cleanliness and your friends mock the city online. Boss-level citizenship is…",
+    options: [
+      "Adding funnier insults about your own city",
+      "Finding one fixable spot — like your school's back gate — and organising a small squad to transform it",
+      "Arguing the survey is fake",
+      "Planning to move to a cleaner city someday",
+    ],
+    correct: 1,
+    feedback:
+      "Rankings change when thousands fix one spot each. Mockery fixes exactly zero spots.",
+  },
+  {
+    id: 516,
+    category: "traffic",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "A classmate got hurt cycling at a junction everyone calls dangerous. Beyond wishing him well, what is the most powerful follow-up?",
+    options: [
+      "Avoid that junction and forget it",
+      "With your class teacher, write to the traffic police describing the junction's exact problem and asking for a fix",
+      "Put up a scary poster near the junction",
+      "Tell juniors cycling is banned",
+    ],
+    correct: 1,
+    feedback:
+      "Specific complaints from schools get junctions fixed — speed breakers exist because someone wrote in.",
+  },
+  {
+    id: 517,
+    category: "public_behavior",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "In your group project chat, friends start sharing an embarrassing photo of a classmate to \"just joke around.\" You are the group admin. What does that role demand?",
+    options: [
+      "Admins only manage members, not content",
+      "Delete it, say \"not in this group,\" and check on the classmate privately",
+      "Save it but not forward it",
+      "Leave the group quietly",
+    ],
+    correct: 1,
+    feedback:
+      "Being admin is a small public office. Protecting one classmate sets the culture for thirty.",
+  },
+  {
+    id: 518,
+    category: "environment",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "Your school canteen uses ~200 plastic spoons daily. You want to pitch a change to the principal. Which pitch is strongest?",
+    options: [
+      "\"Plastic is bad, please ban it.\"",
+      "\"Steel spoons cost more once but save money in months — here is the maths, and our class volunteers to manage washing rotas for a trial week.\"",
+      "\"Other schools banned it, so should we.\"",
+      "\"Students should bring spoons from home or not eat.\"",
+    ],
+    correct: 1,
+    feedback:
+      "Numbers plus a volunteer plan is how twelve-year-olds change institutions. Slogans alone don't.",
+  },
+  {
+    id: 519,
+    category: "cleanliness",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "FINAL CHALLENGE: You get ₹500 and one Sunday to improve your street's cleanliness in a way that LASTS. Which plan wins?",
+    options: [
+      "Hire a cleaner for one deep-clean Sunday",
+      "Buy two sturdy bins, place them at the litter hotspots, and get three shopkeepers to agree to watch over them",
+      "Print 100 'Do Not Litter' posters",
+      "Buy gloves and clean everything yourself once",
+    ],
+    correct: 1,
+    feedback:
+      "Infrastructure plus local owners outlives any single clean-up. You just thought like a city planner.",
+  },
+  {
+    id: 520,
+    category: "public_behavior",
+    grades: SENIOR,
+    boss: true,
+    question:
+      "Election day is declared a holiday and your parents plan a movie instead of voting, saying \"one vote changes nothing.\" As a future voter, your best response?",
+    options: [
+      "Agree — maths says one vote is tiny",
+      "Remind them local seats are sometimes won by a few hundred votes, and offer to plan the movie AFTER the booth visit",
+      "Stay out of adult matters",
+      "Say voting is only for politicians' families",
+    ],
+    correct: 1,
+    feedback:
+      "Whole wards flip by margins smaller than one school's parents. Booth first, popcorn after!",
   },
 ];

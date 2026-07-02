@@ -1,4 +1,4 @@
-import type { CivicCategory } from "./civiquest-questions";
+import type { LevelKey } from "./civiquest-questions";
 
 export type StoredProfile = {
   name: string;
@@ -17,7 +17,7 @@ export type LevelResult = {
 
 export type Progress = {
   xp: number;
-  levels: Partial<Record<CivicCategory, LevelResult>>;
+  levels: Partial<Record<LevelKey, LevelResult>>;
   badges: string[];
   streak: { lastDay: string; count: number };
 };
@@ -139,7 +139,13 @@ export const BADGES: BadgeDef[] = [
     id: "all-rounder",
     emoji: "🧭",
     title: "All-Rounder",
-    hint: "Finish all four levels.",
+    hint: "Finish all four quests.",
+  },
+  {
+    id: "boss-crown",
+    emoji: "👑",
+    title: "Crown of Civvy",
+    hint: "Conquer the Civic Hero Finale.",
   },
   {
     id: "streak-3",
@@ -168,13 +174,16 @@ export function evaluateBadges(
     }
   };
 
-  const levelsDone = Object.keys(progress.levels).length;
-  if (levelsDone >= 1) award("first-splash");
+  const questsDone = Object.keys(progress.levels).filter(
+    (key) => key !== "final",
+  ).length;
+  if (Object.keys(progress.levels).length >= 1) award("first-splash");
   if (lastLevel.total > 0 && lastLevel.score === lastLevel.total)
     award("perfect-wave");
   if (lastLevel.total > 0 && lastLevel.totalTime / lastLevel.total < 20)
     award("quick-fin");
-  if (levelsDone >= 4) award("all-rounder");
+  if (questsDone >= 4) award("all-rounder");
+  if (progress.levels.final) award("boss-crown");
   if (progress.streak.count >= 3) award("streak-3");
   if (progress.xp >= 300) award("civic-hero");
 

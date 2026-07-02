@@ -2,12 +2,79 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { CATEGORY_META, QUESTIONS } from "@/lib/civiquest-questions";
+import { useEffect, useMemo, useState } from "react";
+import { CATEGORY_META, FINAL_META, QUESTIONS } from "@/lib/civiquest-questions";
+import { loadLang, saveLang, type Lang } from "@/lib/i18n";
 import type { TeacherSubmissionRow } from "@/lib/research-types";
+import { LanguageToggle } from "@/app/components/LanguageToggle";
 import { ThemeToggle } from "@/app/components/ThemeToggle";
 
 const GRADES = ["A+", "A", "B", "C", "Needs Practice"];
+
+const TCOPY = {
+  en: {
+    studentApp: "← Student app",
+    title: "Class dashboard 🧑‍🏫",
+    intro:
+      "See how your class answered, spot weak civic areas, and leave an encouraging grade. Enter the school and class exactly as your students typed them, plus the teacher access code.",
+    yourName: "Your name",
+    namePh: "e.g. Mrs. Sharma",
+    school: "School",
+    schoolPh: "School name",
+    classWord: "Class",
+    select: "Select",
+    accessCode: "Access code",
+    codePh: "Teacher code",
+    load: "Load class responses →",
+    loading: "Loading…",
+    noResponses: (school: string, cls: string) =>
+      `No responses yet for ${school}, class ${cls}. Ask your students to play a level!`,
+    responses: (n: number) => `${n} response${n === 1 ? "" : "s"} · newest first`,
+    gradeThis: "Grade this attempt",
+    commentPh:
+      "Encouraging note (optional) — e.g. 'Great road sense, let's practise water habits!'",
+    save: "Save grade",
+    saving: "Saving…",
+    savedTick: "✅ Saved",
+    lastGraded: "Last graded by",
+    expected: "Expected:",
+    noAnswer: "(no answer — timed out)",
+    confidence: "Confidence:",
+    footer:
+      "Teachers see only their own class's responses. Grades are meant to encourage — Civvy never punishes. 💙",
+  },
+  hi: {
+    studentApp: "← छात्र ऐप",
+    title: "क्लास डैशबोर्ड 🧑‍🏫",
+    intro:
+      "देखिए आपकी कक्षा ने कैसे जवाब दिए, कमज़ोर नागरिक क्षेत्र पहचानिए, और हौसला बढ़ाने वाला ग्रेड दीजिए। स्कूल और कक्षा ठीक वैसे लिखें जैसे आपके छात्रों ने लिखा था, साथ में शिक्षक एक्सेस कोड।",
+    yourName: "आपका नाम",
+    namePh: "जैसे: श्रीमती शर्मा",
+    school: "स्कूल",
+    schoolPh: "स्कूल का नाम",
+    classWord: "कक्षा",
+    select: "चुनें",
+    accessCode: "एक्सेस कोड",
+    codePh: "शिक्षक कोड",
+    load: "कक्षा के जवाब देखें →",
+    loading: "लोड हो रहा है…",
+    noResponses: (school: string, cls: string) =>
+      `${school}, कक्षा ${cls} के लिए अभी कोई जवाब नहीं। छात्रों से एक लेवल खिलवाइए!`,
+    responses: (n: number) => `${n} जवाब · सबसे नए पहले`,
+    gradeThis: "इस प्रयास को ग्रेड दें",
+    commentPh:
+      "हौसला बढ़ाने वाली टिप्पणी (वैकल्पिक) — जैसे 'सड़क की समझ बढ़िया, अब पानी की आदतें!'",
+    save: "ग्रेड सहेजें",
+    saving: "सहेजा जा रहा है…",
+    savedTick: "✅ सहेज लिया",
+    lastGraded: "पिछला ग्रेड दिया:",
+    expected: "सही जवाब:",
+    noAnswer: "(जवाब नहीं — समय ख़त्म)",
+    confidence: "आत्मविश्वास:",
+    footer:
+      "शिक्षक सिर्फ़ अपनी कक्षा के जवाब देखते हैं। ग्रेड हौसले के लिए हैं — सिवी कभी सज़ा नहीं देती। 💙",
+  },
+} as const;
 
 type RowState = {
   grade: string;
@@ -17,6 +84,16 @@ type RowState = {
 };
 
 export default function TeacherPage() {
+  const [lang, setLang] = useState<Lang>("en");
+  useEffect(() => {
+    setLang(loadLang());
+  }, []);
+  const tc = TCOPY[lang];
+  const changeLang = (next: Lang) => {
+    setLang(next);
+    saveLang(next);
+  };
+
   const [teacherName, setTeacherName] = useState("");
   const [school, setSchool] = useState("");
   const [className, setClassName] = useState("");
@@ -137,7 +214,7 @@ export default function TeacherPage() {
             CiviQuest <span style={{ color: "var(--brand-strong)" }}>· Teachers</span>
           </span>
         </Link>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Link
             href="/"
             className="rounded-full border px-4 py-2 text-sm font-bold transition hover:scale-105"
@@ -147,8 +224,9 @@ export default function TeacherPage() {
               color: "var(--text-strong)",
             }}
           >
-            ← Student app
+            {tc.studentApp}
           </Link>
+          <LanguageToggle lang={lang} onChange={changeLang} />
           <ThemeToggle />
         </div>
       </header>
@@ -166,43 +244,41 @@ export default function TeacherPage() {
             className="mb-1 font-[var(--font-montserrat)] text-2xl font-black md:text-3xl"
             style={{ color: "var(--text-strong)" }}
           >
-            Class dashboard 🧑‍🏫
+            {tc.title}
           </h1>
           <p className="mb-4 text-sm" style={{ color: "var(--text-soft)" }}>
-            See how your class answered, spot weak civic areas, and leave an
-            encouraging grade. Enter the school and class exactly as your
-            students typed them, plus the teacher access code.
+            {tc.intro}
           </p>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
             <label className="block">
               <span className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-                Your name
+                {tc.yourName}
               </span>
               <input
                 type="text"
                 value={teacherName}
                 onChange={(e) => setTeacherName(e.target.value)}
-                placeholder="e.g. Mrs. Sharma"
+                placeholder={tc.namePh}
                 className="min-h-[46px] w-full rounded-xl border px-3 py-2.5 outline-none"
                 style={inputStyle}
               />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-                School
+                {tc.school}
               </span>
               <input
                 type="text"
                 value={school}
                 onChange={(e) => setSchool(e.target.value)}
-                placeholder="School name"
+                placeholder={tc.schoolPh}
                 className="min-h-[46px] w-full rounded-xl border px-3 py-2.5 outline-none"
                 style={inputStyle}
               />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-                Class
+                {tc.classWord}
               </span>
               <select
                 value={className}
@@ -210,22 +286,23 @@ export default function TeacherPage() {
                 className="min-h-[46px] w-full rounded-xl border px-3 py-2.5 outline-none"
                 style={inputStyle}
               >
-                <option value="">Select</option>
-                <option value="5">Class 5</option>
-                <option value="6">Class 6</option>
-                <option value="7">Class 7</option>
-                <option value="8">Class 8</option>
+                <option value="">{tc.select}</option>
+                {["5", "6", "7", "8"].map((c) => (
+                  <option key={c} value={c}>
+                    {tc.classWord} {c}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-bold uppercase tracking-wide" style={{ color: "var(--text-faint)" }}>
-                Access code
+                {tc.accessCode}
               </span>
               <input
                 type="password"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
-                placeholder="Teacher code"
+                placeholder={tc.codePh}
                 className="min-h-[46px] w-full rounded-xl border px-3 py-2.5 outline-none"
                 style={inputStyle}
               />
@@ -238,7 +315,7 @@ export default function TeacherPage() {
             className="mt-4 min-h-[48px] w-full rounded-2xl px-6 py-3 font-[var(--font-montserrat)] text-lg font-bold transition enabled:hover:scale-[1.01] enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 md:w-auto"
             style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
           >
-            {loading ? "Loading…" : "Load class responses →"}
+            {loading ? tc.loading : tc.load}
           </button>
           {error && (
             <p className="mt-3 text-sm font-semibold" style={{ color: "var(--wrong-text)" }}>
@@ -249,21 +326,21 @@ export default function TeacherPage() {
 
         {rows && rows.length === 0 && (
           <p className="text-center text-sm" style={{ color: "var(--text-faint)" }}>
-            No responses yet for {school}, class {className}. Ask your students
-            to play a level!
+            {tc.noResponses(school, className)}
           </p>
         )}
 
         {rows && rows.length > 0 && (
           <section className="space-y-3">
             <p className="text-sm font-semibold" style={{ color: "var(--text-soft)" }}>
-              {rows.length} response{rows.length === 1 ? "" : "s"} · newest
-              first
+              {tc.responses(rows.length)}
             </p>
             {rows.map((row) => {
               const p = row.payload;
               const meta =
-                CATEGORY_META[p.levelCategory as keyof typeof CATEGORY_META];
+                p.levelCategory === "final"
+                  ? FINAL_META
+                  : CATEGORY_META[p.levelCategory as keyof typeof CATEGORY_META];
               const state = rowState[row.id];
               const isOpen = openId === row.id;
               const total = p.totalQuestions || Object.keys(p.answers).length;
@@ -350,12 +427,11 @@ export default function TeacherPage() {
                                 {i + 1}. {q.question}
                               </p>
                               <p style={{ color: "var(--text-soft)" }}>
-                                {correct ? "✅" : "❌"}{" "}
-                                {answer || "(no answer — timed out)"}
+                                {correct ? "✅" : "❌"} {answer || tc.noAnswer}
                                 {!correct && (
                                   <>
                                     {" "}
-                                    · Expected:{" "}
+                                    · {tc.expected}{" "}
                                     <span className="font-semibold">
                                       {q.options[q.correct]}
                                     </span>
@@ -363,7 +439,7 @@ export default function TeacherPage() {
                                 )}
                               </p>
                               <p className="mt-1 text-xs" style={{ color: "var(--text-faint)" }}>
-                                Confidence: {p.confidenceLevels[i] ?? "—"} ·{" "}
+                                {tc.confidence} {p.confidenceLevels[i] ?? "—"} ·{" "}
                                 {p.timePerQuestion[i] ?? "—"}s
                               </p>
                             </div>
@@ -379,7 +455,7 @@ export default function TeacherPage() {
                         }}
                       >
                         <p className="mb-2 text-sm font-black" style={{ color: "var(--text-strong)" }}>
-                          Grade this attempt
+                          {tc.gradeThis}
                         </p>
                         <div className="flex flex-wrap items-center gap-2">
                           {GRADES.map((g) => (
@@ -427,7 +503,7 @@ export default function TeacherPage() {
                               },
                             }))
                           }
-                          placeholder="Encouraging note (optional) — e.g. 'Great road sense, let's practise water habits!'"
+                          placeholder={tc.commentPh}
                           rows={2}
                           className="mt-3 w-full rounded-xl border px-3 py-2.5 text-sm outline-none"
                           style={inputStyle}
@@ -443,16 +519,16 @@ export default function TeacherPage() {
                               color: "var(--on-brand)",
                             }}
                           >
-                            {state.saving ? "Saving…" : "Save grade"}
+                            {state.saving ? tc.saving : tc.save}
                           </button>
                           {state.savedTick && (
                             <span className="cq-pop-in text-sm font-bold" style={{ color: "var(--correct-text)" }}>
-                              ✅ Saved
+                              {tc.savedTick}
                             </span>
                           )}
                           {row.gradedBy && (
                             <span className="text-xs" style={{ color: "var(--text-faint)" }}>
-                              Last graded by {row.gradedBy}
+                              {tc.lastGraded} {row.gradedBy}
                             </span>
                           )}
                         </div>
@@ -466,8 +542,7 @@ export default function TeacherPage() {
         )}
 
         <p className="mt-8 text-center text-xs" style={{ color: "var(--text-faint)" }}>
-          Teachers see only their own class&apos;s responses. Grades are meant
-          to encourage — Civvy never punishes. 💙
+          {tc.footer}
         </p>
       </main>
     </div>

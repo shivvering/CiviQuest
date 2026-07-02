@@ -1,10 +1,11 @@
 # CiviQuest 🐬
 
 A Duolingo-style civic sense adventure for Indian kids in classes 5–8, live at
-[civiquest.in](https://civiquest.in). Guided by **Civvy** the dolphin, kids play
-short real-life levels (10 missions each, 60 seconds per mission) across four
-quests — Clean Streets 🧼, Road Smarts 🚦, Kind in Public 🤝, and Water &
-Nature 💧 — earning XP, streaks, and badges along the way.
+[civiquest.in](https://civiquest.in). Guided by **Civvy** the dolphin, every
+class gets five levels (10 missions each, 60 seconds per mission): four themed
+quests — Clean Streets 🧼, Road Smarts 🚦, Kind in Public 🤝, Water & Nature 💧
+— plus the mixed **Civic Hero Finale 👑** boss level, earning XP, streaks, and
+badges along the way.
 
 Answers are saved (only with parent/guardian consent) to power a civic-awareness
 research study.
