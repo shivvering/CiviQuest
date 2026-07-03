@@ -8,7 +8,10 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setTheme(loadTheme());
+    const stored = loadTheme();
+    setTheme(stored);
+    // Safety net in case the pre-paint init script didn't run.
+    document.documentElement.dataset.theme = stored;
     setMounted(true);
   }, []);
 

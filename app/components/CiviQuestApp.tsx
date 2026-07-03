@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import gsap from "gsap";
 import {
   LEVEL_SEQUENCE,
   levelMeta,
@@ -34,6 +35,7 @@ import {
 } from "@/lib/progress";
 import { Confetti } from "./Confetti";
 import { LanguageToggle } from "./LanguageToggle";
+import { SplashScreen } from "./SplashScreen";
 import { ThemeToggle } from "./ThemeToggle";
 
 type Tab = "home" | "badges" | "profile";
@@ -94,6 +96,65 @@ export function CiviQuestApp() {
   const timePerQuestionRef = useRef<number[]>([]);
   const correctAudioRef = useRef<HTMLAudioElement | null>(null);
   const wrongAudioRef = useRef<HTMLAudioElement | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const statXpRef = useRef<HTMLSpanElement | null>(null);
+  const statTimeRef = useRef<HTMLSpanElement | null>(null);
+  const statAccRef = useRef<HTMLSpanElement | null>(null);
+
+  // Duolingo-style entrances: everything tagged data-anim pops in with a
+  // springy stagger whenever the screen changes.
+  useEffect(() => {
+    if (!hydrated) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const ctx = gsap.context(() => {
+      const targets = gsap.utils.toArray<HTMLElement>("[data-anim]");
+      if (targets.length) {
+        gsap.from(targets, {
+          y: 24,
+          opacity: 0,
+          scale: 0.97,
+          duration: 0.45,
+          stagger: 0.07,
+          ease: "back.out(1.6)",
+          clearProps: "all",
+        });
+      }
+    }, shellRef);
+    return () => ctx.revert();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, step, tab, qIndex]);
+
+  // Result screen: Duolingo stat cards count up.
+  useEffect(() => {
+    if (step !== "result") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const ctx = gsap.context(() => {
+      const counters: Array<[HTMLElement | null, number, string]> = [
+        [statXpRef.current, xpEarned, "+"],
+        [statTimeRef.current, timeTaken, ""],
+        [
+          statAccRef.current,
+          questions.length ? Math.round((finalScore / questions.length) * 100) : 0,
+          "",
+        ],
+      ];
+      counters.forEach(([el, target, prefix], i) => {
+        if (!el) return;
+        const proxy = { v: 0 };
+        gsap.to(proxy, {
+          v: target,
+          duration: 0.9,
+          delay: 0.35 + i * 0.18,
+          ease: "power1.out",
+          onUpdate: () => {
+            el.textContent = `${prefix}${Math.round(proxy.v)}`;
+          },
+        });
+      });
+    }, shellRef);
+    return () => ctx.revert();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   useEffect(() => {
     const stored = loadProfile();
@@ -103,7 +164,10 @@ export function CiviQuestApp() {
       setStep("map");
     }
     setProgress(loadProgress());
-    setLang(loadLang());
+    const storedLang = loadLang();
+    setLang(storedLang);
+    // React hydration resets <html lang>; re-apply so the Hindi font holds.
+    document.documentElement.lang = storedLang;
     setHydrated(true);
   }, []);
 
@@ -439,6 +503,7 @@ export function CiviQuestApp() {
         <div className="grid items-center gap-8 md:grid-cols-2">
           <div className="text-left">
             <p
+              data-anim
               className="mb-3 inline-block rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-wider"
               style={{
                 backgroundColor: "var(--card-softer)",
@@ -448,6 +513,7 @@ export function CiviQuestApp() {
               {t.heroBadge}
             </p>
             <h1
+              data-anim
               className="mb-4 font-[var(--font-montserrat)] text-4xl font-black leading-[1.15] tracking-tight md:text-6xl"
               style={{ color: "var(--text-strong)" }}
             >
@@ -455,10 +521,10 @@ export function CiviQuestApp() {
               <br />
               {t.heroTitle2}
             </h1>
-            <p className="mb-6 text-base md:text-lg" style={{ color: "var(--text-soft)" }}>
+            <p data-anim className="mb-6 text-base md:text-lg" style={{ color: "var(--text-soft)" }}>
               {t.heroText}
             </p>
-            <div className="mb-8 flex flex-wrap gap-2">
+            <div data-anim className="mb-8 flex flex-wrap gap-2">
               {LEVEL_SEQUENCE.map((key) => {
                 const meta = metaFor(key);
                 return (
@@ -478,32 +544,39 @@ export function CiviQuestApp() {
             </div>
             <button
               type="button"
+              data-anim
               onClick={() => setStep("onboarding")}
-              className="w-full rounded-2xl px-8 py-5 font-[var(--font-montserrat)] text-2xl font-bold transition hover:scale-[1.03] active:scale-[0.97] md:w-auto"
+              className="cq-btn w-full rounded-2xl px-8 py-5 font-[var(--font-montserrat)] text-2xl font-bold uppercase tracking-wide md:w-auto"
               style={{
                 backgroundColor: "var(--brand)",
                 color: "var(--on-brand)",
-                boxShadow: "var(--shadow-pop)",
               }}
             >
               {t.heroCta}
             </button>
           </div>
-          <div className="relative flex items-center justify-center">
+          <div className="relative flex flex-col items-center justify-center">
             <div
               className="absolute inset-4 rounded-full opacity-60 blur-3xl"
               style={{ backgroundColor: "var(--card-softer)" }}
             />
-            <p
-              className="cq-pop-in absolute -top-1 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-2xl px-4 py-2 text-sm font-bold shadow-lg md:text-base"
-              style={{
-                backgroundColor: "var(--card)",
-                color: "var(--text-strong)",
-                boxShadow: "var(--shadow-pop)",
-              }}
-            >
-              {t.civvyHello}
-            </p>
+            <div className="cq-pop-in relative z-10 mb-3">
+              <p
+                className="whitespace-nowrap rounded-2xl px-5 py-2.5 text-sm font-bold md:text-base"
+                style={{
+                  backgroundColor: "var(--card)",
+                  color: "var(--text-strong)",
+                  boxShadow: "var(--shadow-pop)",
+                }}
+              >
+                {t.civvyHello}
+              </p>
+              <span
+                aria-hidden
+                className="absolute -bottom-1 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45"
+                style={{ backgroundColor: "var(--card)" }}
+              />
+            </div>
             <Image
               src="/Civvy-v2.png"
               alt="Civvy the dolphin, CiviQuest's civic-hero mascot"
@@ -671,7 +744,7 @@ export function CiviQuestApp() {
           setHasProfile(true);
           setStep("map");
         }}
-        className="mt-5 min-h-[52px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+        className="cq-btn mt-5 min-h-[52px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-50"
         style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
       >
         {t.openMap}
@@ -679,9 +752,53 @@ export function CiviQuestApp() {
     </section>
   );
 
+  const homeworkDone = Object.keys(progress.levels).length;
+
   const mapScreen = (
-    <section className="cq-slide-up mx-auto w-full max-w-3xl">
+    <section className="mx-auto w-full max-w-3xl">
       <div
+        data-anim
+        className="mb-4 rounded-3xl border-2 p-4 md:p-5"
+        style={{
+          borderColor: "var(--brand)",
+          backgroundColor: "var(--card)",
+          boxShadow: "0 4px 0 var(--line)",
+        }}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-left font-black" style={{ color: "var(--text-strong)" }}>
+            📚 {t.homeworkTitle}
+          </p>
+          <p className="text-sm font-bold" style={{ color: "var(--brand-strong)" }}>
+            {homeworkDone}/{LEVEL_SEQUENCE.length} {t.levelsDone}
+          </p>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          {LEVEL_SEQUENCE.map((key, i) => {
+            const done = Boolean(progress.levels[key]);
+            return (
+              <span
+                key={key}
+                className="flex h-9 flex-1 items-center justify-center rounded-xl text-base font-black"
+                style={{
+                  backgroundColor: done ? "var(--correct-bg)" : "var(--card-softer)",
+                  color: done ? "var(--correct-text)" : "var(--text-faint)",
+                  border: `2px solid ${done ? "var(--correct-line)" : "var(--line)"}`,
+                }}
+                aria-label={`${t.level} ${i + 1}${done ? " ✓" : ""}`}
+              >
+                {done ? "✓" : i === 4 ? "👑" : i + 1}
+              </span>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-left text-xs" style={{ color: "var(--text-faint)" }}>
+          {t.homeworkNote}
+        </p>
+      </div>
+
+      <div
+        data-anim
         className="mb-6 flex items-center gap-4 rounded-3xl border p-4 md:p-5"
         style={{
           borderColor: "var(--line)",
@@ -753,8 +870,23 @@ export function CiviQuestApp() {
               : index % 2 === 0
                 ? "md:mr-auto"
                 : "md:ml-auto";
+            const isCurrent = index === unlockIndex && unlocked;
             return (
-              <li key={cat} className={`relative md:w-[calc(50%+56px)] ${side}`}>
+              <li key={cat} data-anim className={`relative md:w-[calc(50%+56px)] ${side}`}>
+                {isCurrent && (
+                  <span
+                    className="cq-start-bubble absolute -top-4 left-1/2 z-10 rounded-xl border-2 px-3 py-1 text-xs font-black uppercase tracking-widest"
+                    style={{
+                      backgroundColor: "var(--card)",
+                      borderColor: isBoss ? "var(--gold)" : "var(--brand)",
+                      color: isBoss ? "var(--gold)" : "var(--brand-strong)",
+                      boxShadow: "var(--shadow-pop)",
+                    }}
+                    aria-hidden
+                  >
+                    {t.startHere}
+                  </span>
+                )}
                 <button
                   type="button"
                   disabled={!unlocked}
@@ -768,11 +900,12 @@ export function CiviQuestApp() {
                   }}
                 >
                   <span
-                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 text-3xl transition group-enabled:group-hover:scale-110"
+                    className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 text-3xl transition group-enabled:group-hover:scale-110 ${
+                      isCurrent ? "cq-ring-pulse" : ""
+                    }`}
                     style={{
                       backgroundColor: unlocked ? meta.color : "var(--card-softer)",
                       borderColor: "var(--card)",
-                      boxShadow: "var(--shadow-pop)",
                     }}
                   >
                     {unlocked ? meta.emoji : "🔒"}
@@ -895,7 +1028,15 @@ export function CiviQuestApp() {
         </h2>
 
         <div>
-          <div className="space-y-3">
+          <div
+            className={`space-y-3 ${
+              phase === "revealed" &&
+              !timedOutIds.includes(question.id) &&
+              answers[question.id] !== question.correct
+                ? "cq-shake"
+                : ""
+            }`}
+          >
             {localized.options.map((option, idx) => {
               const picked = answers[question.id] === idx;
               const revealed = phase === "revealed";
@@ -996,7 +1137,7 @@ export function CiviQuestApp() {
                 !confidences[question.id]
               }
               onClick={check}
-              className="mt-6 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition enabled:hover:scale-[1.02] enabled:active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="cq-btn mt-6 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold uppercase tracking-wide disabled:cursor-not-allowed disabled:opacity-50"
               style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
             >
               {t.check}
@@ -1043,8 +1184,14 @@ export function CiviQuestApp() {
                 type="button"
                 onClick={continueNext}
                 autoFocus
-                className="mt-4 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition hover:scale-[1.02] active:scale-[0.98]"
-                style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
+                className="cq-btn mt-4 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold uppercase tracking-wide"
+                style={{
+                  backgroundColor:
+                    answers[question.id] === question.correct
+                      ? "#3fae5a"
+                      : "var(--brand)",
+                  color: "var(--on-brand)",
+                }}
               >
                 {qIndex === questions.length - 1 ? t.seeResults : t.continue}
               </button>
@@ -1093,12 +1240,39 @@ export function CiviQuestApp() {
           </span>
         )}
       </p>
-      <p className="mb-4 text-sm" style={{ color: "var(--text-soft)" }}>
-        {t.time}: {timeTaken}s · {t.xpEarned}:{" "}
-        <span className="font-black" style={{ color: "var(--gold)" }}>
-          +{xpEarned}
-        </span>
-      </p>
+      <div className="mx-auto mb-5 grid max-w-md grid-cols-3 gap-3">
+        {(
+          [
+            [t.statXp, statXpRef, "var(--gold)", `+${xpEarned}`],
+            [t.statTime, statTimeRef, "var(--brand)", `${timeTaken}`],
+            [
+              t.statAccuracy,
+              statAccRef,
+              "#3fae5a",
+              `${questions.length ? Math.round((finalScore / questions.length) * 100) : 0}`,
+            ],
+          ] as const
+        ).map(([label, ref, color, fallback]) => (
+          <div
+            key={label}
+            data-anim
+            className="overflow-hidden rounded-2xl border-2 text-center"
+            style={{ borderColor: color, backgroundColor: "var(--card)" }}
+          >
+            <p
+              className="px-1 py-1 text-[10px] font-black uppercase tracking-widest md:text-xs"
+              style={{ backgroundColor: color, color: "#fff" }}
+            >
+              {label}
+            </p>
+            <p className="px-2 py-2.5 text-xl font-black tabular-nums md:text-2xl" style={{ color: "var(--text-strong)" }}>
+              <span ref={ref}>{fallback}</span>
+              {label === t.statTime && "s"}
+              {label === t.statAccuracy && "%"}
+            </p>
+          </div>
+        ))}
+      </div>
 
       {newBadges.length > 0 && (
         <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
@@ -1169,7 +1343,7 @@ export function CiviQuestApp() {
       <button
         type="button"
         onClick={() => setStep("map")}
-        className="mt-5 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold transition hover:scale-[1.02] active:scale-[0.98]"
+        className="cq-btn mt-5 min-h-[54px] w-full rounded-2xl px-6 py-4 font-[var(--font-montserrat)] text-xl font-bold uppercase tracking-wide"
         style={{ backgroundColor: "var(--brand)", color: "var(--on-brand)" }}
       >
         {t.backToMap}
@@ -1398,7 +1572,8 @@ export function CiviQuestApp() {
   const showNav = step !== "quiz";
 
   return (
-    <div className="relative min-h-screen px-3 py-5 md:px-6 md:py-7">
+    <div ref={shellRef} className="relative min-h-screen px-3 py-5 md:px-6 md:py-7">
+      <SplashScreen />
       {header}
       <main className="relative z-10">
         {tab === "home" && (

@@ -102,6 +102,149 @@ html[lang="hi"] body {
   line-height: 1.65;
 }
 
+/* ─── Duolingo-style 3D controls ─────────────────────────────────── */
+
+/*
+ * The signature press-down button: solid fill + darker "floor" edge
+ * rendered with box-shadow, collapsing on :active. Pair with inline
+ * background-color and set --btn-floor to a darker shade of it.
+ */
+.cq-btn {
+  --btn-floor: rgba(6, 62, 95, 0.45);
+  box-shadow: 0 5px 0 var(--btn-floor);
+  transform: translateY(0);
+  transition: transform 0.09s ease, box-shadow 0.09s ease, filter 0.15s ease;
+  will-change: transform;
+}
+.cq-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.cq-btn:active:not(:disabled) {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 var(--btn-floor);
+}
+.cq-btn:disabled {
+  box-shadow: 0 5px 0 var(--btn-floor);
+}
+
+/* Card with the Duolingo bottom-heavy edge. */
+.cq-card3d {
+  border-width: 2px;
+  box-shadow: 0 4px 0 var(--line);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+button.cq-card3d:not(:disabled):active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--line);
+}
+
+/* ─── Splash screen ocean ────────────────────────────────────────── */
+
+.cq-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #0a3d62 0%, #1e6fa8 45%, #2f9bd7 100%);
+  overflow: hidden;
+}
+
+.cq-splash-wave {
+  position: absolute;
+  left: -50%;
+  width: 200%;
+  height: 42vh;
+  bottom: -6vh;
+  border-radius: 45% 55% 0 0 / 100% 100% 0 0;
+  opacity: 0.5;
+}
+
+.cq-splash-bubble {
+  position: absolute;
+  bottom: -30px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.15));
+  pointer-events: none;
+}
+
+@keyframes cq-shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+}
+
+.cq-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.25) 25%,
+    rgba(255, 255, 255, 0.9) 50%,
+    rgba(255, 255, 255, 0.25) 75%
+  );
+  background-size: 200px 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: cq-shimmer 1.6s linear infinite;
+}
+
+/* ─── Map path extras ────────────────────────────────────────────── */
+
+@keyframes cq-bounce-soft {
+  0%,
+  100% {
+    transform: translate(-50%, 0);
+  }
+  50% {
+    transform: translate(-50%, -8px);
+  }
+}
+
+.cq-start-bubble {
+  animation: cq-bounce-soft 1s ease-in-out infinite;
+}
+
+@keyframes cq-ring-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(66, 150, 205, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(66, 150, 205, 0);
+  }
+}
+
+.cq-ring-pulse {
+  animation: cq-ring-pulse 1.8s ease-out infinite;
+}
+
+@keyframes cq-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(7px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.cq-shake {
+  animation: cq-shake 0.4s ease-in-out;
+}
+
 /* ─── Motion ─────────────────────────────────────────────────────── */
 
 @keyframes cq-float {
@@ -246,7 +389,11 @@ html[lang="hi"] body {
   .cq-pulse-danger,
   .cq-confetti,
   .cq-xp-rise,
-  .cq-path-dash {
+  .cq-path-dash,
+  .cq-start-bubble,
+  .cq-ring-pulse,
+  .cq-shake,
+  .cq-shimmer {
     animation: none;
   }
   body {

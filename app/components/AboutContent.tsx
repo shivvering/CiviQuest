@@ -27,6 +27,11 @@ const COPY = {
     civvyTitle: "Meet Civvy 🐬",
     civvyText:
       "Civvy is a bright blue dolphin in a civic-hero cape. We chose a dolphin because dolphins are intelligent, friendly, and deeply social — exactly the qualities of a thoughtful citizen. Civvy is not a teacher or an examiner; Civvy is a teammate who celebrates every kind choice you make.",
+    susuTitle: "Civvy's real-life cousin 🌊",
+    susuText1:
+      "Civvy is inspired by the Ganges river dolphin — India's national aquatic animal, lovingly called the “susu” for the sound it makes when it surfaces to breathe. It is nearly blind and finds its way through our rivers using sound alone.",
+    susuText2:
+      "Today the susu is endangered: only a few thousand remain, threatened by polluted water, plastic waste, and shrinking rivers. That is exactly why Civvy wears the civic-hero cape — every wrapper that reaches a bin instead of a drain, and every drop of water saved, makes India's rivers safer for Civvy's real family. Your civic sense is their lifeline.",
     responsibleTitle: "Responsible by design 🔒",
     responsible: [
       "Answers are saved for civic-education research only after a parent or guardian gives consent with their email.",
@@ -57,6 +62,11 @@ const COPY = {
     civvyTitle: "मिलो सिवी से 🐬",
     civvyText:
       "सिवी सिविक-हीरो केप वाली चमकीली नीली डॉल्फ़िन है। हमने डॉल्फ़िन चुनी क्योंकि डॉल्फ़िन बुद्धिमान, दोस्ताना और मिलनसार होती हैं — बिल्कुल एक समझदार नागरिक के गुण। सिवी न टीचर है, न परीक्षक; सिवी वह साथी है जो तुम्हारे हर अच्छे चुनाव पर जश्न मनाती है।",
+    susuTitle: "सिवी की असली बहन 🌊",
+    susuText1:
+      "सिवी की प्रेरणा है गंगा नदी की डॉल्फ़िन — भारत का राष्ट्रीय जलीय जीव, जिसे साँस लेने के लिए ऊपर आने पर निकलने वाली आवाज़ के कारण प्यार से “सूसू” कहते हैं। यह लगभग देख नहीं पाती और सिर्फ़ आवाज़ के सहारे हमारी नदियों में रास्ता खोजती है।",
+    susuText2:
+      "आज सूसू संकट में है: कुछ ही हज़ार बची हैं — गंदे पानी, प्लास्टिक कचरे और सूखती नदियों के कारण। इसीलिए सिवी ने सिविक-हीरो केप पहनी है — नाले की जगह डस्टबिन में पहुँचा हर रैपर और बचाई गई पानी की हर बूँद भारत की नदियों को सिवी के असली परिवार के लिए सुरक्षित बनाती है। तुम्हारा सिविक सेंस ही उनकी ज़िंदगी की डोर है।",
     responsibleTitle: "ज़िम्मेदारी हमारी बनावट में है 🔒",
     responsible: [
       "जवाब सिर्फ़ नागरिक-शिक्षा शोध के लिए, और सिर्फ़ माता-पिता/अभिभावक की ईमेल-सहमति के बाद सहेजे जाते हैं।",
@@ -74,7 +84,9 @@ const COPY = {
 export function AboutContent() {
   const [lang, setLang] = useState<Lang>("en");
   useEffect(() => {
-    setLang(loadLang());
+    const stored = loadLang();
+    setLang(stored);
+    document.documentElement.lang = stored;
   }, []);
   const c = COPY[lang];
   const t = ui(lang);
@@ -218,6 +230,27 @@ export function AboutContent() {
             {c.civvyTitle}
           </h2>
           <p style={{ color: "var(--text-soft)" }}>{c.civvyText}</p>
+        </section>
+
+        <section
+          className="rounded-[34px] border-2 p-6 md:p-8"
+          style={{
+            borderColor: "var(--brand)",
+            background:
+              "linear-gradient(160deg, var(--card) 0%, var(--card-soft) 100%)",
+            boxShadow: "var(--shadow-pop)",
+          }}
+        >
+          <h2
+            className="mb-3 font-[var(--font-montserrat)] text-2xl font-black md:text-3xl"
+            style={{ color: "var(--text-strong)" }}
+          >
+            {c.susuTitle}
+          </h2>
+          <div className="space-y-3" style={{ color: "var(--text-soft)" }}>
+            <p>{c.susuText1}</p>
+            <p>{c.susuText2}</p>
+          </div>
         </section>
 
         <section className="rounded-[34px] border p-6 md:p-8" style={card}>

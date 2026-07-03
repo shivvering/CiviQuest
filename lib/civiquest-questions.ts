@@ -184,16 +184,16 @@ export const QUESTIONS: CiviQuestion[] = [
     category: "cleanliness",
     grades: ALL,
     question:
-      "You see a classmate spit paan-style out of the school bus window like a cricketer they admire. What do you think?",
+      "A famous vlogger you follow tosses his empty cup out of the car window in a video, and your friend says, \"He's so cool!\" What do you think?",
     options: [
-      "It looks cool, maybe I should try",
-      "Spitting spreads germs and dirties streets — not a habit to copy",
-      "It is fine because famous people do it",
-      "It is okay as long as teachers do not see",
+      "If he does it, it must be okay",
+      "Being famous doesn't make littering okay — the street is not a dustbin",
+      "I would try it once to feel like him",
+      "It is fine if the road already looks dirty",
     ],
     correct: 1,
     feedback:
-      "Habits are worth copying only when they make shared spaces better.",
+      "Copy people's hard work, not their bad habits — an empty cup can ride along till the next bin.",
   },
   {
     id: 107,
@@ -549,15 +549,16 @@ export const QUESTIONS: CiviQuestion[] = [
     category: "public_behavior",
     grades: ALL,
     question:
-      "You see someone spit on the footpath near a bus stop. How would you react in real life?",
+      "At the bus stop, a man is talking loudly on speakerphone right next to a sleeping baby in a pram. The mother looks troubled. What would you most likely do?",
     options: [
-      "Feel uneasy but stay quiet",
-      "If it feels safe, politely mention that spitting spreads germs",
-      "Laugh and make a joke about it",
-      "Do the same so you do not stand out",
+      "Stare at him angrily until he notices",
+      "If it feels safe, politely ask him to lower the volume — or make space so the pram can move away",
+      "Put on your own loud music to compete",
+      "Laugh about it with your friends",
     ],
     correct: 1,
-    feedback: "A calm word can help — and if it feels unsafe, not copying is already a win.",
+    feedback:
+      "Shared spaces work when someone speaks up kindly — and helping the mother move is just as good.",
   },
   {
     id: 302,

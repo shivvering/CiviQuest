@@ -22,9 +22,9 @@ function gradeLabel(grade: string, lang: "en" | "hi"): string {
 const TCOPY = {
   en: {
     studentApp: "← Student app",
-    title: "Class dashboard 🧑‍🏫",
+    title: "Holiday homework dashboard 🧑‍🏫",
     intro:
-      "See how your class answered, spot weak civic areas, and leave an encouraging grade. Enter the school and class exactly as your students typed them, plus the teacher access code.",
+      "Your students' holiday homework, level by level: see how your class answered, spot weak civic areas, and leave an encouraging grade. Enter the school and class exactly as your students typed them, plus the teacher access code.",
     yourName: "Your name",
     namePh: "e.g. Mrs. Sharma",
     school: "School",
@@ -53,9 +53,9 @@ const TCOPY = {
   },
   hi: {
     studentApp: "← छात्र ऐप",
-    title: "क्लास डैशबोर्ड 🧑‍🏫",
+    title: "छुट्टियों के होमवर्क का डैशबोर्ड 🧑‍🏫",
     intro:
-      "देखिए आपकी कक्षा ने कैसे जवाब दिए, कमज़ोर नागरिक क्षेत्र पहचानिए, और हौसला बढ़ाने वाला ग्रेड दीजिए। स्कूल और कक्षा ठीक वैसे लिखें जैसे आपके छात्रों ने लिखा था, साथ में शिक्षक एक्सेस कोड।",
+      "आपके छात्रों का छुट्टियों का होमवर्क, लेवल-दर-लेवल: देखिए कक्षा ने कैसे जवाब दिए, कमज़ोर नागरिक क्षेत्र पहचानिए, और हौसला बढ़ाने वाला ग्रेड दीजिए। स्कूल और कक्षा ठीक वैसे लिखें जैसे छात्रों ने लिखा था, साथ में शिक्षक एक्सेस कोड।",
     yourName: "आपका नाम",
     namePh: "जैसे: श्रीमती शर्मा",
     school: "स्कूल",
@@ -94,7 +94,9 @@ type RowState = {
 export default function TeacherPage() {
   const [lang, setLang] = useState<Lang>("en");
   useEffect(() => {
-    setLang(loadLang());
+    const stored = loadLang();
+    setLang(stored);
+    document.documentElement.lang = stored;
   }, []);
   const tc = TCOPY[lang];
   const changeLang = (next: Lang) => {

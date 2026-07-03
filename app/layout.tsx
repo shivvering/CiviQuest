@@ -72,6 +72,9 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col font-sans">
+        {/* Raw script so it executes during HTML parsing (pre-paint).
+            next/script beforeInteractive does not run inline scripts in
+            the app router; React's dev-only warning here is acceptable. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         {children}
       </body>
