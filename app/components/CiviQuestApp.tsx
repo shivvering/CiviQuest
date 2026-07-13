@@ -116,7 +116,9 @@ export function CiviQuestApp() {
           duration: 0.45,
           stagger: 0.07,
           ease: "back.out(1.6)",
-          clearProps: "all",
+          // Only clear what we animated — "all" wipes React's inline styles
+          // (e.g. the blue background on the Start Your Quest button).
+          clearProps: "transform,opacity",
         });
       }
     }, shellRef);
@@ -205,6 +207,8 @@ export function CiviQuestApp() {
   // ─── Quiz engine ─────────────────────────────────────────────────
 
   const startLevel = (cat: LevelKey) => {
+    // Graded homework: one attempt per level, locked once submitted.
+    if (progress.levels[cat]) return;
     setCategory(cat);
     setQIndex(0);
     setPhase("answering");
@@ -889,12 +893,18 @@ export function CiviQuestApp() {
                 )}
                 <button
                   type="button"
-                  disabled={!unlocked}
+                  disabled={!unlocked || played}
                   onClick={() => startLevel(cat)}
-                  className="group flex w-full items-center gap-4 rounded-3xl border p-4 text-left transition enabled:hover:-translate-y-1 enabled:hover:shadow-lg disabled:opacity-55 md:p-5"
+                  className={`group flex w-full items-center gap-4 rounded-3xl border p-4 text-left transition enabled:hover:-translate-y-1 enabled:hover:shadow-lg md:p-5 ${
+                    played ? "" : "disabled:opacity-55"
+                  }`}
                   style={{
-                    borderColor: isBoss && unlocked ? "var(--gold)" : "var(--line)",
-                    borderWidth: isBoss ? 2 : 1,
+                    borderColor: played
+                      ? "var(--correct-line)"
+                      : isBoss && unlocked
+                        ? "var(--gold)"
+                        : "var(--line)",
+                    borderWidth: isBoss || played ? 2 : 1,
                     backgroundColor: "var(--card)",
                     boxShadow: "var(--shadow-pop)",
                   }}
@@ -936,15 +946,21 @@ export function CiviQuestApp() {
                   <span
                     className="shrink-0 rounded-full px-4 py-2 text-sm font-bold"
                     style={
-                      unlocked
+                      played
                         ? {
-                            backgroundColor: isBoss ? "var(--gold)" : "var(--brand)",
-                            color: isBoss ? "#4a3800" : "var(--on-brand)",
+                            backgroundColor: "var(--correct-bg)",
+                            color: "var(--correct-text)",
+                            border: "2px solid var(--correct-line)",
                           }
-                        : { backgroundColor: "var(--card-softer)", color: "var(--text-faint)" }
+                        : unlocked
+                          ? {
+                              backgroundColor: isBoss ? "var(--gold)" : "var(--brand)",
+                              color: isBoss ? "#4a3800" : "var(--on-brand)",
+                            }
+                          : { backgroundColor: "var(--card-softer)", color: "var(--text-faint)" }
                     }
                   >
-                    {played ? t.replay : unlocked ? (isBoss ? t.battle : t.start) : t.locked}
+                    {played ? t.submitted : unlocked ? (isBoss ? t.battle : t.start) : t.locked}
                   </span>
                 </button>
               </li>
@@ -1588,7 +1604,7 @@ export function CiviQuestApp() {
         {tab === "badges" && badgesScreen}
         {tab === "profile" && profileScreen}
       </main>
-      {showNav && bottomNav}
+      {showNav && hasProfile && bottomNav}
       <footer className="mx-auto mt-6 max-w-5xl text-center text-xs" style={{ color: "var(--text-faint)" }}>
         <Link href="/about" className="underline underline-offset-2">
           {t.aboutCiviquest}

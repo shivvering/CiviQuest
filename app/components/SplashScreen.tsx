@@ -1,17 +1,17 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 
 const SESSION_KEY = "cq-splashed";
+const BUBBLE_COUNT = 14;
 
 /**
- * Full-screen ocean loader: Civvy dives out of the water in an arc while
- * the app hydrates. Shows once per browser session, for at least minMs so
- * the dive completes, then fades away.
+ * Full-screen ocean loader: a stream of bubbles rises fast from the bottom,
+ * then — at mid-screen — snaps into slow motion and drifts up until it
+ * fades out. Shows once per browser session for at least minMs.
  */
-export function SplashScreen({ minMs = 1900 }: { minMs?: number }) {
+export function SplashScreen({ minMs = 2200 }: { minMs?: number }) {
   const [visible, setVisible] = useState(() => {
     if (typeof window === "undefined") return false;
     return !window.sessionStorage.getItem(SESSION_KEY);
@@ -21,7 +21,6 @@ export function SplashScreen({ minMs = 1900 }: { minMs?: number }) {
     return window.localStorage.getItem("cq-lang") === "hi";
   });
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const dolphinRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -32,63 +31,59 @@ export function SplashScreen({ minMs = 1900 }: { minMs?: number }) {
     ).matches;
 
     const ctx = gsap.context(() => {
-      if (!reduced && dolphinRef.current) {
-        // Dive arc: rise out of the "water", flip, dive back, repeat.
-        const tl = gsap.timeline({ repeat: -1 });
-        tl.fromTo(
-          dolphinRef.current,
-          { y: 150, rotation: -18, opacity: 0.4 },
-          {
-            y: -60,
-            rotation: 10,
-            opacity: 1,
-            duration: 0.9,
-            ease: "power2.out",
-          },
-        )
-          .to(dolphinRef.current, {
-            y: 150,
-            rotation: 38,
-            opacity: 0.5,
-            duration: 0.9,
-            ease: "power2.in",
-          })
-          .set(dolphinRef.current, { rotation: -18 });
+      if (reduced) return;
 
-        // Rising bubbles
-        gsap.utils
-          .toArray<HTMLElement>(".cq-splash-bubble")
-          .forEach((bubble, i) => {
-            gsap.fromTo(
-              bubble,
-              { y: 0, opacity: 0 },
-              {
-                y: -window.innerHeight * 0.9,
-                opacity: 0.9,
-                duration: 3 + (i % 3),
-                repeat: -1,
-                delay: i * 0.45,
-                ease: "none",
-              },
-            );
+      // Some embedded viewports report innerHeight 0 — fall back hard.
+      const screenH = () =>
+        window.innerHeight ||
+        document.documentElement.clientHeight ||
+        window.screen?.height ||
+        900;
+
+      gsap.utils
+        .toArray<HTMLElement>(".cq-splash-bubble")
+        .forEach((bubble, i) => {
+          // Fast sprint to mid-screen, then a sudden slow-motion drift
+          // to the top where the bubble dissolves. Function-based values
+          // + repeatRefresh so resizes are picked up every loop.
+          const tl = gsap.timeline({
+            repeat: -1,
+            delay: (i * 0.37) % 2.6,
+            repeatDelay: 0.15,
+            repeatRefresh: true,
           });
+          tl.set(bubble, { y: 30, opacity: 0, scale: 0.7 })
+            .to(bubble, {
+              y: () => -screenH() * 0.5,
+              opacity: 1,
+              scale: 1,
+              duration: 0.5 + (i % 3) * 0.08,
+              ease: "power1.in",
+            })
+            .to(bubble, {
+              y: () => -screenH() * 1.05,
+              opacity: 0,
+              scale: 1.15,
+              duration: 3.2 + (i % 4) * 0.4,
+              ease: "none",
+            });
+        });
 
-        // Waves drifting sideways
-        gsap.to(".cq-splash-wave--a", {
-          x: 60,
-          duration: 3.2,
-          yoyo: true,
-          repeat: -1,
-          ease: "sine.inOut",
-        });
-        gsap.to(".cq-splash-wave--b", {
-          x: -80,
-          duration: 4.1,
-          yoyo: true,
-          repeat: -1,
-          ease: "sine.inOut",
-        });
-      }
+      // Gentle drifting waves at the bottom keep the water alive.
+      gsap.to(".cq-splash-wave--a", {
+        x: 60,
+        duration: 3.2,
+        yoyo: true,
+        repeat: -1,
+        ease: "sine.inOut",
+      });
+      gsap.to(".cq-splash-wave--b", {
+        x: -80,
+        duration: 4.1,
+        yoyo: true,
+        repeat: -1,
+        ease: "sine.inOut",
+      });
     }, rootRef);
 
     const timer = window.setTimeout(() => {
@@ -116,29 +111,19 @@ export function SplashScreen({ minMs = 1900 }: { minMs?: number }) {
       <div className="cq-splash-wave cq-splash-wave--a" style={{ background: "#1e6fa8" }} />
       <div className="cq-splash-wave cq-splash-wave--b" style={{ background: "#2f9bd7", height: "34vh", bottom: "-8vh" }} />
 
-      {Array.from({ length: 7 }, (_, i) => (
+      {Array.from({ length: BUBBLE_COUNT }, (_, i) => (
         <span
           key={i}
           className="cq-splash-bubble"
           style={{
-            left: `${12 + i * 12}%`,
-            width: `${8 + (i % 3) * 6}px`,
-            height: `${8 + (i % 3) * 6}px`,
+            left: `${4 + ((i * 61) % 92)}%`,
+            width: `${8 + (i % 5) * 7}px`,
+            height: `${8 + (i % 5) * 7}px`,
           }}
         />
       ))}
 
-      <div className="relative z-10 flex flex-col items-center gap-4">
-        <div ref={dolphinRef}>
-          <Image
-            src="/Civvy-v2.png"
-            alt=""
-            width={200}
-            height={200}
-            priority
-            className="h-36 w-36 object-contain md:h-44 md:w-44"
-          />
-        </div>
+      <div className="relative z-10 flex flex-col items-center gap-3">
         <p className="font-[var(--font-montserrat)] text-3xl font-black tracking-tight text-white md:text-4xl">
           CiviQuest
         </p>
