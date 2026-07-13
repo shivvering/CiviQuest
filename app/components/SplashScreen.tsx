@@ -21,7 +21,36 @@ export function SplashScreen({ minMs = 2200 }: { minMs?: number }) {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem("cq-lang") === "hi";
   });
+  // The glow filter draws boxy artifacts around the image while the PNG is
+  // still decoding — keep the logo hidden until it has fully loaded, then
+  // fade it in with the glow.
+  const [logoReady, setLogoReady] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+
+  // Load events are unreliable across caches/webviews — poll `complete`
+  // briefly instead, then reveal the logo with its glow.
+  useEffect(() => {
+    const check = () => {
+      const img = rootRef.current?.querySelector("img");
+      if (img?.complete && img.naturalWidth > 0) {
+        setLogoReady(true);
+        return true;
+      }
+      return false;
+    };
+    if (check()) return;
+    const poll = window.setInterval(() => {
+      if (check()) window.clearInterval(poll);
+    }, 120);
+    const stop = window.setTimeout(() => {
+      window.clearInterval(poll);
+      setLogoReady(true); // fail-open: show the logo regardless
+    }, 5000);
+    return () => {
+      window.clearInterval(poll);
+      window.clearTimeout(stop);
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -134,8 +163,16 @@ export function SplashScreen({ minMs = 2200 }: { minMs?: number }) {
           width={120}
           height={119}
           priority
+          onLoad={() => setLogoReady(true)}
           className="h-24 w-24 object-contain md:h-28 md:w-28"
-          style={{ filter: "drop-shadow(0 6px 18px rgba(255, 255, 255, 0.35))" }}
+          style={{
+            opacity: logoReady ? 1 : 0,
+            transform: logoReady ? "scale(1)" : "scale(0.9)",
+            filter: logoReady
+              ? "drop-shadow(0 6px 18px rgba(255, 255, 255, 0.35))"
+              : "none",
+            transition: "opacity 0.5s ease, transform 0.5s ease, filter 0.5s ease",
+          }}
         />
         <p className="font-[var(--font-montserrat)] text-3xl font-black tracking-tight text-white md:text-4xl">
           CiviQuest
