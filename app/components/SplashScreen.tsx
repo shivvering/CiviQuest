@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 
@@ -127,6 +128,15 @@ export function SplashScreen({ minMs = 2200 }: { minMs?: number }) {
       })}
 
       <div className="relative z-10 flex flex-col items-center gap-3">
+        <Image
+          src="/cq-logo.png"
+          alt="CiviQuest logo"
+          width={120}
+          height={119}
+          priority
+          className="h-24 w-24 object-contain md:h-28 md:w-28"
+          style={{ filter: "drop-shadow(0 6px 18px rgba(255, 255, 255, 0.35))" }}
+        />
         <p className="font-[var(--font-montserrat)] text-3xl font-black tracking-tight text-white md:text-4xl">
           CiviQuest
         </p>
