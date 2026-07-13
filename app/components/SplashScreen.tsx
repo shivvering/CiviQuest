@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 
 const SESSION_KEY = "cq-splashed";
-const BUBBLE_COUNT = 14;
+const BUBBLE_COUNT = 30;
 
 /**
  * Full-screen ocean loader: a stream of bubbles rises fast from the bottom,
@@ -111,17 +111,20 @@ export function SplashScreen({ minMs = 2200 }: { minMs?: number }) {
       <div className="cq-splash-wave cq-splash-wave--a" style={{ background: "#1e6fa8" }} />
       <div className="cq-splash-wave cq-splash-wave--b" style={{ background: "#2f9bd7", height: "34vh", bottom: "-8vh" }} />
 
-      {Array.from({ length: BUBBLE_COUNT }, (_, i) => (
-        <span
-          key={i}
-          className="cq-splash-bubble"
-          style={{
-            left: `${4 + ((i * 61) % 92)}%`,
-            width: `${8 + (i % 5) * 7}px`,
-            height: `${8 + (i % 5) * 7}px`,
-          }}
-        />
-      ))}
+      {Array.from({ length: BUBBLE_COUNT }, (_, i) => {
+        const size = 6 + (i % 7) * 5;
+        return (
+          <span
+            key={i}
+            className="cq-splash-bubble"
+            style={{
+              left: `${2 + ((i * 61) % 95)}%`,
+              width: `${size}px`,
+              height: `${size}px`,
+            }}
+          />
+        );
+      })}
 
       <div className="relative z-10 flex flex-col items-center gap-3">
         <p className="font-[var(--font-montserrat)] text-3xl font-black tracking-tight text-white md:text-4xl">
