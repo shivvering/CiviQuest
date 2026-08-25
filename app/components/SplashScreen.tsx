@@ -157,23 +157,35 @@ export function SplashScreen({ minMs = 2200 }: { minMs?: number }) {
       })}
 
       <div className="relative z-10 flex flex-col items-center gap-3">
-        <Image
-          src="/cq-logo.png"
-          alt="CiviQuest logo"
-          width={120}
-          height={119}
-          priority
-          onLoad={() => setLogoReady(true)}
-          className="h-24 w-24 object-contain md:h-28 md:w-28"
-          style={{
-            opacity: logoReady ? 1 : 0,
-            transform: logoReady ? "scale(1)" : "scale(0.9)",
-            filter: logoReady
-              ? "drop-shadow(0 6px 18px rgba(255, 255, 255, 0.35))"
-              : "none",
-            transition: "opacity 0.5s ease, transform 0.5s ease, filter 0.5s ease",
-          }}
-        />
+        <div className="relative">
+          {/* Soft halo as a plain gradient div — CSS filters on the large
+              transparent PNG glitch on some GPUs. */}
+          <div
+            aria-hidden
+            className="absolute rounded-full"
+            style={{
+              inset: "-28%",
+              background:
+                "radial-gradient(circle, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.12) 45%, transparent 70%)",
+              opacity: logoReady ? 1 : 0,
+              transition: "opacity 0.6s ease",
+            }}
+          />
+          <Image
+            src="/cq-logo.png"
+            alt="CiviQuest logo"
+            width={120}
+            height={119}
+            priority
+            onLoad={() => setLogoReady(true)}
+            className="relative h-24 w-24 object-contain md:h-28 md:w-28"
+            style={{
+              opacity: logoReady ? 1 : 0,
+              transform: logoReady ? "scale(1)" : "scale(0.9)",
+              transition: "opacity 0.5s ease, transform 0.5s ease",
+            }}
+          />
+        </div>
         <p className="font-[var(--font-montserrat)] text-3xl font-black tracking-tight text-white md:text-4xl">
           CiviQuest
         </p>
