@@ -164,6 +164,64 @@ button.cq-card3d:not(:disabled):active {
   pointer-events: none;
 }
 
+/* Once the app is running it controls the splash (it may wait for a tap),
+   so the no-JavaScript failsafe must not hide it. */
+.cq-splash.is-live {
+  animation: none;
+}
+
+.cq-splash.needs-tap {
+  cursor: pointer;
+}
+
+/* "Tap to dive in" — shown when the device blocks sound until a tap. */
+.cq-splash-tap {
+  --tap-floor: rgba(6, 62, 95, 0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #0a3d62;
+  font-size: 1.05rem;
+  font-weight: 800;
+  padding: 0.8rem 1.6rem;
+  box-shadow: 0 5px 0 var(--tap-floor);
+  transition: transform 0.09s ease, box-shadow 0.09s ease;
+  animation:
+    cq-splash-tap-in 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) both,
+    cq-splash-tap-pulse 1.4s ease-out 0.5s infinite;
+}
+
+.cq-splash-tap:active {
+  transform: translateY(5px);
+}
+
+@keyframes cq-splash-tap-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cq-splash-tap-pulse {
+  0% {
+    box-shadow:
+      0 5px 0 var(--tap-floor),
+      0 0 0 0 rgba(255, 255, 255, 0.65);
+  }
+  100% {
+    box-shadow:
+      0 5px 0 var(--tap-floor),
+      0 0 0 16px rgba(255, 255, 255, 0);
+  }
+}
+
 @keyframes cq-splash-failsafe {
   to {
     opacity: 0;
@@ -525,7 +583,8 @@ html:not([lang="hi"]) .cq-splash-text-hi {
   .cq-shimmer,
   .cq-splash-bubble,
   .cq-splash-wave,
-  .cq-splash-logo {
+  .cq-splash-logo,
+  .cq-splash-tap {
     animation: none;
   }
   body {

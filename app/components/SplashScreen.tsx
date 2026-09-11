@@ -16,8 +16,10 @@ export function isSplashDone(): boolean {
 }
 
 const MIN_VISIBLE_MS = 2800;
-const MAX_VISIBLE_MS = 7000;
+const MAX_LOADING_MS = 7000;
 const LEAVE_MS = 550;
+/** After a tap starts the sound, keep the ocean up long enough to hear it. */
+const AFTER_TAP_MS = 1200;
 const BACK_BUBBLES = 44;
 const FRONT_BUBBLES = 16;
 
@@ -84,18 +86,27 @@ function fadeOutAudio(audio: HTMLAudioElement | null) {
   }, 50);
 }
 
+type SoundState = "pending" | "playing" | "blocked" | "unavailable";
+
 /**
  * Full-screen ocean loader shown on every page load. It is server-rendered
  * and CSS-animated so it covers the page from the very first paint; the
- * client only decides when to lift it (page fully loaded, and at least
- * MIN_VISIBLE_MS since navigation started).
+ * client decides when to lift it (page loaded, at least MIN_VISIBLE_MS since
+ * navigation started, and the bubble sound playing).
+ *
+ * Phones and Safari refuse to play sound until the visitor taps the page. When
+ * that happens the loader shows a "Tap to dive in" button and waits for the
+ * tap, which starts the sound — the only way sound can play on those devices.
  */
 export function SplashScreen() {
+  const [live, setLive] = useState(false);
+  const [needsTap, setNeedsTap] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [gone, setGone] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
+    setLive(true);
     try {
       if (window.localStorage.getItem("cq-lang") === "hi") {
         document.documentElement.lang = "hi";
@@ -105,82 +116,145 @@ export function SplashScreen() {
     }
 
     const audio = audioRef.current;
-    const unlockEvents = ["pointerdown", "touchstart", "keydown"] as const;
+    // pointerdown/touchstart don't count as permission to play sound on
+    // phones; the end of a tap and the click do.
+    const gestureEvents = ["pointerup", "touchend", "click", "keydown"] as const;
     const timers: number[] = [];
+    let sound: SoundState = "pending";
+    let attempting = false;
+    let tappedAt: number | null = null;
+    let ready = false;
     let done = false;
 
-    function removeUnlock() {
-      unlockEvents.forEach((name) =>
-        window.removeEventListener(name, playFromGesture),
+    function removeGestures() {
+      gestureEvents.forEach((name) =>
+        window.removeEventListener(name, onGesture),
       );
     }
 
-    function playFromGesture() {
-      removeUnlock();
-      if (!done && audio?.paused) {
-        void audio.play().catch(() => {});
-      }
+    function leave() {
+      if (done) return;
+      done = true;
+      removeGestures();
+      (window as SplashWindow).__cqSplashDone = true;
+      window.dispatchEvent(new Event(SPLASH_DONE_EVENT));
+      setNeedsTap(false);
+      setLeaving(true);
+      timers.push(window.setTimeout(() => setGone(true), LEAVE_MS));
+      timers.push(window.setTimeout(() => fadeOutAudio(audio), 2500));
     }
 
-    if (audio) {
-      audio.volume = 0.8;
-      void audio.play().catch(() => {
-        // Browsers block sound until the visitor interacts with the site, so
-        // fall back to the first tap or key press while the splash is up.
-        if (!done) {
-          unlockEvents.forEach((name) =>
-            window.addEventListener(name, playFromGesture, { passive: true }),
-          );
-        }
-      });
+    function maybeLeave() {
+      if (done || !ready || sound === "pending") return;
+      if (sound === "blocked") {
+        setNeedsTap(true);
+        return;
+      }
+      const wait =
+        tappedAt === null ? 0 : tappedAt + AFTER_TAP_MS - performance.now();
+      if (wait > 0) {
+        timers.push(window.setTimeout(maybeLeave, wait));
+        return;
+      }
+      leave();
     }
+
+    function startSound(fromGesture: boolean) {
+      if (!audio) {
+        sound = "unavailable";
+        maybeLeave();
+        return;
+      }
+      attempting = true;
+      audio
+        .play()
+        .then(() => {
+          attempting = false;
+          sound = "playing";
+          setNeedsTap(false);
+          maybeLeave();
+        })
+        .catch((error: unknown) => {
+          attempting = false;
+          if (sound === "playing") return;
+          const blocked =
+            error instanceof DOMException && error.name === "NotAllowedError";
+          if (blocked) {
+            sound = "blocked";
+            if (fromGesture) tappedAt = null;
+            setNeedsTap(true);
+          } else {
+            sound = "unavailable";
+          }
+          maybeLeave();
+        });
+    }
+
+    function onGesture() {
+      if (done || sound === "playing" || attempting) return;
+      tappedAt = performance.now();
+      setNeedsTap(false);
+      startSound(true);
+    }
+
+    gestureEvents.forEach((name) =>
+      window.addEventListener(name, onGesture, { passive: true }),
+    );
+    if (audio) audio.volume = 0.8;
+    startSound(false);
 
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
     const minMs = reduced ? 1200 : MIN_VISIBLE_MS;
 
-    function leave() {
-      if (done) return;
-      done = true;
-      removeUnlock();
-      (window as SplashWindow).__cqSplashDone = true;
-      window.dispatchEvent(new Event(SPLASH_DONE_EVENT));
-      setLeaving(true);
-      timers.push(window.setTimeout(() => setGone(true), LEAVE_MS));
-      timers.push(window.setTimeout(() => fadeOutAudio(audio), 1200));
+    function markReady() {
+      ready = true;
+      maybeLeave();
     }
 
-    function scheduleLeave() {
+    function scheduleReady() {
       timers.push(
-        window.setTimeout(leave, Math.max(0, minMs - performance.now())),
+        window.setTimeout(markReady, Math.max(0, minMs - performance.now())),
       );
     }
 
     if (document.readyState === "complete") {
-      scheduleLeave();
+      scheduleReady();
     } else {
-      window.addEventListener("load", scheduleLeave, { once: true });
+      window.addEventListener("load", scheduleReady, { once: true });
     }
+    // Don't wait forever on slow assets or a sound file that won't load.
     timers.push(
-      window.setTimeout(leave, Math.max(0, MAX_VISIBLE_MS - performance.now())),
+      window.setTimeout(
+        () => {
+          if (sound === "pending") sound = "unavailable";
+          markReady();
+        },
+        Math.max(0, MAX_LOADING_MS - performance.now()),
+      ),
     );
 
     return () => {
-      removeUnlock();
-      window.removeEventListener("load", scheduleLeave);
+      removeGestures();
+      window.removeEventListener("load", scheduleReady);
       timers.forEach((id) => window.clearTimeout(id));
     };
   }, []);
 
+  const splashClass = [
+    "cq-splash",
+    live && "is-live",
+    needsTap && "needs-tap",
+    leaving && "is-leaving",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <>
       {!gone && (
-        <div
-          className={`cq-splash${leaving ? " is-leaving" : ""}`}
-          role="status"
-          aria-label="Loading CiviQuest"
-        >
+        <div className={splashClass} role="status" aria-label="Loading CiviQuest">
           <div className="cq-splash-wave cq-splash-wave--a" aria-hidden />
           <div className="cq-splash-wave cq-splash-wave--b" aria-hidden />
 
@@ -206,10 +280,18 @@ export function SplashScreen() {
             <p className="font-[var(--font-montserrat)] text-3xl font-black tracking-tight text-white md:text-4xl">
               CiviQuest
             </p>
-            <p className="cq-shimmer text-sm font-bold md:text-base">
-              <span className="cq-splash-text-en">Civvy is warming up…</span>
-              <span className="cq-splash-text-hi">सिवी तैयार हो रही है…</span>
-            </p>
+            {needsTap ? (
+              <button type="button" className="cq-splash-tap">
+                <span aria-hidden>🔊</span>
+                <span className="cq-splash-text-en">Tap to dive in</span>
+                <span className="cq-splash-text-hi">डुबकी लगाने के लिए टैप करो</span>
+              </button>
+            ) : (
+              <p className="cq-shimmer text-sm font-bold md:text-base">
+                <span className="cq-splash-text-en">Civvy is warming up…</span>
+                <span className="cq-splash-text-hi">सिवी तैयार हो रही है…</span>
+              </p>
+            )}
           </div>
         </div>
       )}
