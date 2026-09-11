@@ -140,6 +140,11 @@ button.cq-card3d:not(:disabled):active {
 
 /* ─── Splash screen ocean ────────────────────────────────────────── */
 
+/*
+ * Server-rendered and CSS-animated so it covers the page from the first
+ * paint, before any JavaScript runs. The failsafe hides it even if the
+ * app never hydrates.
+ */
 .cq-splash {
   position: fixed;
   inset: 0;
@@ -149,6 +154,22 @@ button.cq-card3d:not(:disabled):active {
   justify-content: center;
   background: linear-gradient(180deg, #0a3d62 0%, #1e6fa8 45%, #2f9bd7 100%);
   overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.55s ease;
+  animation: cq-splash-failsafe 0.6s ease 9s forwards;
+}
+
+.cq-splash.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@keyframes cq-splash-failsafe {
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
 
 .cq-splash-wave {
@@ -159,14 +180,122 @@ button.cq-card3d:not(:disabled):active {
   bottom: -6vh;
   border-radius: 45% 55% 0 0 / 100% 100% 0 0;
   opacity: 0.5;
+  will-change: transform;
 }
 
+.cq-splash-wave--a {
+  background: #1e6fa8;
+  animation: cq-wave-drift 3.2s ease-in-out infinite alternate;
+}
+
+.cq-splash-wave--b {
+  --wave-x: -80px;
+  background: #2f9bd7;
+  height: 34vh;
+  bottom: -8vh;
+  animation: cq-wave-drift 4.1s ease-in-out infinite alternate;
+}
+
+@keyframes cq-wave-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(var(--wave-x, 60px));
+  }
+}
+
+/* Each bubble sprints to mid-screen, then drifts up in slow motion and
+   dissolves. Size, speed, delay and sideways drift come from inline vars. */
 .cq-splash-bubble {
   position: absolute;
-  bottom: -30px;
+  bottom: -48px;
+  z-index: 1;
+  width: var(--s);
+  height: var(--s);
   border-radius: 9999px;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.15));
+  background: radial-gradient(
+    circle at 32% 30%,
+    rgba(255, 255, 255, 0.95) 0 10%,
+    rgba(255, 255, 255, 0.22) 38%,
+    rgba(255, 255, 255, 0.06) 72%
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
   pointer-events: none;
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: cq-bubble-rise var(--dur) linear var(--delay) infinite both;
+}
+
+/* See-through front layer that passes over the logo. */
+.cq-splash-bubble--front {
+  z-index: 3;
+  background: radial-gradient(
+    circle at 32% 30%,
+    rgba(255, 255, 255, 0.75) 0 9%,
+    rgba(255, 255, 255, 0.12) 40%,
+    rgba(255, 255, 255, 0.03) 72%
+  );
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+@keyframes cq-bubble-rise {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.6);
+    opacity: 0;
+    animation-timing-function: cubic-bezier(0.5, 0, 1, 0.6);
+  }
+  4% {
+    opacity: 1;
+  }
+  15% {
+    transform: translate3d(calc(var(--drift) * 0.25), -55vh, 0) scale(1);
+    opacity: 1;
+    animation-timing-function: linear;
+  }
+  100% {
+    transform: translate3d(var(--drift), -120vh, 0) scale(1.18);
+    opacity: 0;
+  }
+}
+
+.cq-splash-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cq-splash-logo {
+  animation: cq-splash-logo-in 0.7s cubic-bezier(0.34, 1.4, 0.64, 1) 0.1s both;
+}
+
+@keyframes cq-splash-logo-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html[lang="hi"] .cq-splash-text-en,
+html:not([lang="hi"]) .cq-splash-text-hi {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .cq-splash-bubble {
+    width: calc(var(--s) * 0.78);
+    height: calc(var(--s) * 0.78);
+  }
+  .cq-splash-bubble--desktop {
+    display: none;
+  }
 }
 
 @keyframes cq-shimmer {
@@ -393,7 +522,10 @@ button.cq-card3d:not(:disabled):active {
   .cq-start-bubble,
   .cq-ring-pulse,
   .cq-shake,
-  .cq-shimmer {
+  .cq-shimmer,
+  .cq-splash-bubble,
+  .cq-splash-wave,
+  .cq-splash-logo {
     animation: none;
   }
   body {

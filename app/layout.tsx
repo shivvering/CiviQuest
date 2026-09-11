@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Baloo_2, Montserrat, Sora } from "next/font/google";
+import { SplashScreen } from "@/app/components/SplashScreen";
 import "./globals.css";
 
 const sora = Sora({
@@ -76,6 +77,7 @@ export default function RootLayout({
             next/script beforeInteractive does not run inline scripts in
             the app router; React's dev-only warning here is acceptable. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <SplashScreen />
         {children}
       </body>
     </html>

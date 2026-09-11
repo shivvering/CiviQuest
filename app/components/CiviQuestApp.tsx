@@ -35,7 +35,7 @@ import {
 } from "@/lib/progress";
 import { Confetti } from "./Confetti";
 import { LanguageToggle } from "./LanguageToggle";
-import { SplashScreen } from "./SplashScreen";
+import { SPLASH_DONE_EVENT, isSplashDone } from "./SplashScreen";
 import { ThemeToggle } from "./ThemeToggle";
 
 type Tab = "home" | "badges" | "profile";
@@ -102,27 +102,39 @@ export function CiviQuestApp() {
   const statAccRef = useRef<HTMLSpanElement | null>(null);
 
   // Duolingo-style entrances: everything tagged data-anim pops in with a
-  // springy stagger whenever the screen changes.
+  // springy stagger whenever the screen changes. On a fresh page load this
+  // waits for the loading screen to lift so the pop-in is actually seen.
   useEffect(() => {
     if (!hydrated) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const ctx = gsap.context(() => {
-      const targets = gsap.utils.toArray<HTMLElement>("[data-anim]");
-      if (targets.length) {
-        gsap.from(targets, {
-          y: 24,
-          opacity: 0,
-          scale: 0.97,
-          duration: 0.45,
-          stagger: 0.07,
-          ease: "back.out(1.6)",
-          // Only clear what we animated — "all" wipes React's inline styles
-          // (e.g. the blue background on the Start Your Quest button).
-          clearProps: "transform,opacity",
-        });
-      }
-    }, shellRef);
-    return () => ctx.revert();
+    let ctx: gsap.Context | undefined;
+    const run = () => {
+      ctx = gsap.context(() => {
+        const targets = gsap.utils.toArray<HTMLElement>("[data-anim]");
+        if (targets.length) {
+          gsap.from(targets, {
+            y: 24,
+            opacity: 0,
+            scale: 0.97,
+            duration: 0.45,
+            stagger: 0.07,
+            ease: "back.out(1.6)",
+            // Only clear what we animated — "all" wipes React's inline styles
+            // (e.g. the blue background on the Start Your Quest button).
+            clearProps: "transform,opacity",
+          });
+        }
+      }, shellRef);
+    };
+    if (isSplashDone()) {
+      run();
+    } else {
+      window.addEventListener(SPLASH_DONE_EVENT, run, { once: true });
+    }
+    return () => {
+      window.removeEventListener(SPLASH_DONE_EVENT, run);
+      ctx?.revert();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, step, tab, qIndex]);
 
@@ -1589,7 +1601,6 @@ export function CiviQuestApp() {
 
   return (
     <div ref={shellRef} className="relative min-h-screen px-3 py-5 md:px-6 md:py-7">
-      <SplashScreen />
       {header}
       <main className="relative z-10">
         {tab === "home" && (

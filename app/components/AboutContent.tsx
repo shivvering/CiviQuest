@@ -14,9 +14,38 @@ const COPY = {
     heroTitle2: "Better India.",
     heroText:
       "Children learn civic rules in school — but often only in theory. CiviQuest turns that passive learning into a game: real-life situations from Indian streets, parks, buses, and classrooms, where every choice you practise here becomes easier to make out there.",
+    problemTitle: "The problem we're solving 🧩",
+    problemLead:
+      "More than 4,000 years ago, Mohenjo-daro had covered drains. Today, litter still lands a metre away from the bin. India's civic sense problem isn't about what children know — it's about what they practise.",
+    problemPoints: [
+      {
+        emoji: "🧠",
+        title: "A habit gap, not a knowledge gap",
+        text: "Children already know littering is wrong. Litter dropped next to a bin, traffic lanes treated as suggestions, taps left running — these aren't only enforcement failures. They're habits, and habits form early.",
+      },
+      {
+        emoji: "📖",
+        title: "Taught once, then forgotten",
+        text: "In most schools, civic education is a textbook chapter, examined once and forgotten. What's missing is repetition and delivery — something that makes the right choice habitual, not occasional.",
+      },
+      {
+        emoji: "🔁",
+        title: "Borrowing what already works",
+        text: "Duolingo didn't make languages easier with better textbooks. It made them stick with short, repeatable daily practice and visible progress. CiviQuest brings those same mechanics to everyday civic choices.",
+      },
+      {
+        emoji: "🗣️",
+        title: "Two languages from day one",
+        text: "A civic tool that works only in English isn't civic education for most Indian schoolchildren. Every scenario is written to read naturally in both English and Hindi — not translated as an afterthought.",
+      },
+    ],
+    problemQuote:
+      "We cannot work towards a clean India without first being able to imagine one. That imagining has to start young.",
+    problemHonest:
+      "An honest note: CiviQuest is a prototype, not yet a proven intervention. We'll only know whether it changes how children behave at a bus stop once schools use it and there is real data to study.",
     whyTitle: "Why classes 5 to 8? 🌱",
     why1:
-      "Ages 10 to 14 are a golden window. Research in child development calls these the years when values move from “rules parents gave me” to “things I believe myself.” Habits formed now — carrying litter to a bin, waiting for the green signal, saving water — tend to stick for life.",
+      "Ten to fourteen is the window where behaviour hardens into values. Younger children mostly follow instructions; older ones have already formed their positions. In between, a child is old enough to reason about why something matters — and young enough to change what they do about it. Habits formed now, like carrying litter to a bin or waiting for the green signal, tend to stick for life.",
     why2:
       "Children this age are also natural influencers at home: a 10-year-old who insists on segregating waste often gets the whole family doing it. Reaching one child in class 6 can quietly reach a household of five.",
     why3:
@@ -49,9 +78,38 @@ const COPY = {
     heroTitle2: "बेहतर भारत।",
     heroText:
       "बच्चे स्कूल में नागरिक नियम सीखते हैं — पर अक्सर सिर्फ़ किताबों में। CiviQuest उस किताबी सीख को खेल बना देता है: भारतीय सड़कों, पार्कों, बसों और क्लासरूम की असली परिस्थितियाँ, जहाँ यहाँ अभ्यास किया हर चुनाव बाहर करना आसान हो जाता है।",
+    problemTitle: "हम कौन-सी समस्या हल कर रहे हैं 🧩",
+    problemLead:
+      "4,000 से भी ज़्यादा साल पहले मोहनजोदड़ो में ढकी हुई नालियाँ थीं। आज भी कचरा डस्टबिन से एक मीटर दूर गिरता है। भारत की सिविक सेंस की समस्या यह नहीं कि बच्चे क्या जानते हैं — बल्कि यह है कि वे क्या अभ्यास करते हैं।",
+    problemPoints: [
+      {
+        emoji: "🧠",
+        title: "आदत की कमी, जानकारी की नहीं",
+        text: "बच्चे पहले से जानते हैं कि कचरा फैलाना ग़लत है। डस्टबिन के पास फेंका कचरा, ट्रैफ़िक लेन को बस सुझाव समझना, खुला छोड़ा नल — ये सिर्फ़ नियम लागू न होने की ग़लती नहीं। ये आदतें हैं, और आदतें बचपन में बनती हैं।",
+      },
+      {
+        emoji: "📖",
+        title: "एक बार पढ़ाया, फिर भुला दिया",
+        text: "ज़्यादातर स्कूलों में नागरिक शिक्षा किताब का एक पाठ है — एक बार परीक्षा हुई और भूल गए। कमी है दोहराव और सही तरीक़े की — कुछ ऐसा जो सही चुनाव को कभी-कभार की बजाय आदत बना दे।",
+      },
+      {
+        emoji: "🔁",
+        title: "जो पहले से काम करता है, वही अपनाया",
+        text: "Duolingo ने भाषाएँ बेहतर किताबों से आसान नहीं कीं। छोटे, रोज़ दोहराए जाने वाले अभ्यास और दिखती प्रगति से उन्हें पक्का किया। CiviQuest यही तरीक़ा रोज़ के नागरिक चुनावों पर लाता है।",
+      },
+      {
+        emoji: "🗣️",
+        title: "पहले दिन से दो भाषाएँ",
+        text: "जो नागरिक-शिक्षा का साधन सिर्फ़ अंग्रेज़ी में चले, वह ज़्यादातर भारतीय स्कूली बच्चों के लिए नागरिक शिक्षा नहीं है। हर परिस्थिति अंग्रेज़ी और हिंदी दोनों में स्वाभाविक लगे, इस तरह लिखी गई है — बाद में अनुवाद करके नहीं।",
+      },
+    ],
+    problemQuote:
+      "हम साफ़ भारत की ओर तभी बढ़ सकते हैं, जब पहले उसकी कल्पना कर सकें। और यह कल्पना बचपन से शुरू होनी चाहिए।",
+    problemHonest:
+      "एक ईमानदार बात: CiviQuest अभी एक प्रोटोटाइप है, साबित हुआ समाधान नहीं। यह बस स्टॉप पर बच्चों का व्यवहार बदलता है या नहीं, यह तभी पता चलेगा जब स्कूल इसे इस्तेमाल करेंगे और असली डेटा आएगा।",
     whyTitle: "कक्षा 5 से 8 ही क्यों? 🌱",
     why1:
-      "10 से 14 साल की उम्र सुनहरी खिड़की है। बाल-विकास शोध कहता है कि इन्हीं सालों में मूल्य “मम्मी-पापा के नियम” से बदलकर “मेरी अपनी सोच” बनते हैं। अभी बनी आदतें — कचरा डस्टबिन तक ले जाना, हरी बत्ती का इंतज़ार, पानी की बचत — ज़िंदगी भर साथ रहती हैं।",
+      "10 से 14 साल वह उम्र है जब व्यवहार मूल्यों में बदलता है। छोटे बच्चे ज़्यादातर बस निर्देश मानते हैं; बड़े बच्चे अपनी राय पहले ही बना चुके होते हैं। बीच की इस उम्र में बच्चा यह समझने लायक़ बड़ा होता है कि कोई बात क्यों ज़रूरी है — और अपना व्यवहार बदलने लायक़ छोटा भी। अभी बनी आदतें, जैसे कचरा डस्टबिन तक ले जाना या हरी बत्ती का इंतज़ार, ज़िंदगी भर साथ रहती हैं।",
     why2:
       "इस उम्र के बच्चे घर के क़ुदरती इन्फ़्लुएंसर भी होते हैं: कचरा अलग करने की ज़िद करने वाला 10 साल का बच्चा अक्सर पूरे परिवार से करवा लेता है। कक्षा 6 के एक बच्चे तक पहुँचना चुपचाप पाँच लोगों के घर तक पहुँचना है।",
     why3:
@@ -163,6 +221,56 @@ export function AboutContent() {
               <p style={{ color: "var(--text-soft)" }}>{c.heroText}</p>
             </div>
           </div>
+        </section>
+
+        <section className="rounded-[34px] border p-6 md:p-8" style={card}>
+          <h2
+            className="mb-3 font-[var(--font-montserrat)] text-2xl font-black md:text-3xl"
+            style={{ color: "var(--text-strong)" }}
+          >
+            {c.problemTitle}
+          </h2>
+          <p
+            className="mb-5 text-base md:text-lg"
+            style={{ color: "var(--text-soft)" }}
+          >
+            {c.problemLead}
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {c.problemPoints.map((point) => (
+              <div
+                key={point.title}
+                className="rounded-2xl border p-4"
+                style={{
+                  borderColor: "var(--line)",
+                  backgroundColor: "var(--card-soft)",
+                }}
+              >
+                <p className="mb-1 text-2xl" aria-hidden>
+                  {point.emoji}
+                </p>
+                <p className="mb-1 font-black" style={{ color: "var(--text-strong)" }}>
+                  {point.title}
+                </p>
+                <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+                  {point.text}
+                </p>
+              </div>
+            ))}
+          </div>
+          <blockquote
+            className="mt-5 rounded-2xl border-l-4 px-5 py-4 text-lg font-bold italic md:text-xl"
+            style={{
+              borderColor: "var(--brand)",
+              backgroundColor: "var(--card-softer)",
+              color: "var(--text-strong)",
+            }}
+          >
+            “{c.problemQuote}”
+          </blockquote>
+          <p className="mt-4 text-sm" style={{ color: "var(--text-faint)" }}>
+            {c.problemHonest}
+          </p>
         </section>
 
         <section className="rounded-[34px] border p-6 md:p-8" style={card}>
